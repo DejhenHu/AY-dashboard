@@ -342,6 +342,160 @@ elif page == "🚢 郵輪":
                               })
                 st.plotly_chart(fig3, use_container_width=True)
 
+                # ── 各船統整 ──────────────────────────────
+                hp_prev = cruise_prev[cruise_prev["cruise_type"] == "母港出發"].copy()
+                hp_prev["品牌"] = hp_prev["bnb_name"].apply(dp._cruise_brand)
+
+                def color_diff(val):
+                    if val > 0:   return "color: green; font-weight: bold"
+                    elif val < 0: return "color: red; font-weight: bold"
+                    return ""
+
+                # ── 預先計算 days_wide / mon_wide（供①主因欄使用）──
+                cur_days  = homeport_ci.copy()
+                cur_days["天數"] = (cur_days["nights"] + 1).astype(str) + " 天"
+                cur_days["期別"] = "本期"
+                prev_days = hp_prev.copy()
+                prev_days["天數"] = (prev_days["nights"] + 1).astype(str) + " 天"
+                prev_days["期別"] = "前期"
+
+                days_combined = pd.concat([
+                    cur_days[["品牌", "天數", "期別", "order_id"]],
+                    prev_days[["品牌", "天數", "期別", "order_id"]]
+                ])
+                days_chart = (days_combined.groupby(["品牌", "天數", "期別"])["order_id"]
+                                           .count().reset_index(name="訂單數"))
+                brands_present = [b for b in ["麗星郵輪", "MSC地中海", "歌詩達"]
+                                  if b in days_chart["品牌"].unique()]
+                days_cur_g  = cur_days.groupby(["品牌","天數"])["order_id"].count().reset_index(name="本期")
+                days_prev_g = prev_days.groupby(["品牌","天數"])["order_id"].count().reset_index(name="前期")
+                days_wide   = (days_cur_g.merge(days_prev_g, on=["品牌","天數"], how="outer")
+                                         .fillna(0).astype({"本期":int,"前期":int}))
+                days_wide["差異"] = days_wide["本期"] - days_wide["前期"]
+                days_wide["abs差"] = days_wide["差異"].abs()
+
+                cur_mon  = homeport_ci.copy(); cur_mon["期別"]  = "本期"
+                prev_mon = hp_prev.copy()
+                prev_mon["check_in_month"] = prev_mon["check_in"].dt.to_period("M").astype(str)
+                prev_mon["期別"] = "前期"
+                mon_cur_g  = cur_mon.groupby(["品牌","check_in_month"])["order_id"].count().reset_index(name="本期")
+                mon_prev_g = prev_mon.groupby(["品牌","check_in_month"])["order_id"].count().reset_index(name="前期")
+                mon_wide   = (mon_cur_g.merge(mon_prev_g, on=["品牌","check_in_month"], how="outer")
+                                       .fillna(0).astype({"本期":int,"前期":int})
+                                       .rename(columns={"check_in_month":"出發月份"}))
+                mon_wide["差異"] = mon_wide["本期"] - mon_wide["前期"]
+                mon_wide["abs差"] = mon_wide["差異"].abs()
+
+                # 各品牌最大影響原因（天數＋月份各取一，綜合絕對量與成長率）
+                def _score_df(df):
+                    df = df.copy()
+                    df["成長率"] = df.apply(
+                        lambda r: (r["差異"] / r["前期"] * 100) if r["前期"] > 0 else (
+                            999 if r["差異"] > 0 else -999
+                        ), axis=1
+                    )
+                    df["abs成長率"] = df["成長率"].abs()
+                    # 綜合分數：絕對量 × 成長率^0.5（避免純靠大基數壓過高倍率）
+                    df["score"] = df["abs差"] * df["abs成長率"].pow(0.5)
+                    return df
+
+                def brand_main_reason(brand):
+                    d = _score_df(days_wide[days_wide["品牌"] == brand])
+                    m = _score_df(mon_wide[mon_wide["品牌"] == brand])
+                    parts = []
+                    for df, label_col, dim in [(d, "天數", "天數"), (m, "出發月份", "月份")]:
+                        cands = df[df["abs差"] >= 3]
+                        if cands.empty:
+                            continue
+                        best = cands.loc[cands["score"].idxmax()]
+                        arrow = "▲" if best["差異"] > 0 else "▼"
+                        if best["前期"] > 0:
+                            rate = f"{abs(best['成長率']):.0f}%"
+                        else:
+                            rate = "新增"
+                        parts.append(
+                            f"{dim}：{best[label_col]} {arrow}{int(abs(best['差異']))}單（{rate}）"
+                        )
+                    return " / ".join(parts) if parts else "–"
+
+                # ① 訂單數
+                st.subheader("① 訂單數：本期 vs 前期")
+                ord_cur  = homeport_ci.groupby("品牌")["order_id"].count().rename("本期")
+                ord_prev = hp_prev.groupby("品牌")["order_id"].count().rename("前期")
+                ord_tbl  = pd.concat([ord_cur, ord_prev], axis=1).fillna(0).astype(int)
+                ord_tbl["差異"] = ord_tbl["本期"] - ord_tbl["前期"]
+                ord_tbl = ord_tbl.reset_index()
+                ord_tbl["主要影響"] = ord_tbl["品牌"].apply(brand_main_reason)
+                st.dataframe(
+                    ord_tbl.style.map(color_diff, subset=["差異"])
+                                 .format({"差異": "{:+d}"}),
+                    use_container_width=True, hide_index=True
+                )
+
+                # ② 出發天數分佈
+                st.subheader("② 出發天數：本期 vs 前期")
+
+                def facet_chart(data, x_col, x_label, title, brands):
+                    fig = px.bar(
+                        data[data["品牌"].isin(brands)],
+                        x=x_col, y="訂單數", color="期別", barmode="group",
+                        facet_col="品牌", facet_col_wrap=3,
+                        facet_col_spacing=0.12,
+                        color_discrete_map={"本期": "#1f77b4", "前期": "#aec7e8"},
+                        category_orders={"期別": ["前期", "本期"]},
+                        title=title, labels={x_col: x_label}
+                    )
+                    fig.update_layout(height=380, legend=dict(orientation="h", y=1.12))
+                    fig.for_each_annotation(
+                        lambda a: a.update(
+                            text=f"<b>{a.text.split('=')[-1]}</b>",
+                            font_size=14
+                        )
+                    )
+                    fig.update_xaxes(tickangle=-30)
+                    return fig
+
+                def top_changes(df_wide, dim_col, n=3, threshold=3):
+                    """各品牌中差異最大的前 n 筆；差異絕對值 < threshold 的品牌省略。"""
+                    df_wide = df_wide.copy()
+                    df_wide["abs差"] = df_wide["差異"].abs()
+                    msgs = []
+                    for brand, grp in df_wide.groupby("品牌"):
+                        grp = grp[grp["abs差"] >= threshold]
+                        if grp.empty:
+                            continue
+                        top = grp.nlargest(n, "abs差")
+                        brand_msgs = []
+                        for _, row in top.iterrows():
+                            arrow = "▲" if row["差異"] > 0 else "▼"
+                            color = "🟢" if row["差異"] > 0 else "🔴"
+                            brand_msgs.append(
+                                f"&nbsp;&nbsp;{color} {row[dim_col]}：{row['本期']} 單"
+                                f"（前期 {row['前期']} 單，{arrow}{abs(int(row['差異']))}）"
+                            )
+                        if brand_msgs:
+                            msgs.append(f"**{brand}**\n\n" + "\n\n".join(brand_msgs))
+                    return "\n\n---\n\n".join(msgs) if msgs else "各品牌本期與前期無明顯差異。"
+
+                # ② 出發天數
+                fig_days = facet_chart(days_chart, "天數", "出發天數",
+                                       "各船出發天數分佈（本期 vs 前期）", brands_present)
+                st.plotly_chart(fig_days, use_container_width=True)
+                st.markdown(top_changes(days_wide, "天數"))
+
+                # ③ 出發月份
+                st.subheader("③ 出發月份：本期 vs 前期")
+                mon_combined = pd.concat([
+                    cur_mon[["品牌", "check_in_month", "期別", "order_id"]],
+                    prev_mon[["品牌", "check_in_month", "期別", "order_id"]]
+                ])
+                mon_chart = (mon_combined.groupby(["品牌", "check_in_month", "期別"])["order_id"]
+                                         .count().reset_index(name="訂單數"))
+                fig_mon = facet_chart(mon_chart, "check_in_month", "出發月份",
+                                      "各船出發月份分佈（本期 vs 前期）", brands_present)
+                st.plotly_chart(fig_mon, use_container_width=True)
+                st.markdown(top_changes(mon_wide, "出發月份"))
+
         # ── 飛航郵輪 ──────────────────────────────────────
         with ctab_fly:
             if fly_df.empty:
