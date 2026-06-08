@@ -309,10 +309,19 @@ elif page == "🚢 郵輪":
                     st.plotly_chart(fig, use_container_width=True)
 
                 with col2:
-                    h_nights = (homeport_df.groupby("nights")
-                                           .agg(訂單數=("order_id", "count"))
-                                           .reset_index()
-                                           .sort_values("nights"))
+                    all_brands = ["麗星郵輪", "MSC地中海", "歌詩達"]
+                    selected_brands = st.multiselect(
+                        "品牌篩選（訂購晚數）", options=all_brands, default=all_brands,
+                        key="homeport_brand_filter"
+                    )
+                    homeport_nights = homeport_df.copy()
+                    homeport_nights["品牌"] = homeport_nights["bnb_name"].apply(dp._cruise_brand)
+                    if selected_brands:
+                        homeport_nights = homeport_nights[homeport_nights["品牌"].isin(selected_brands)]
+                    h_nights = (homeport_nights.groupby("nights")
+                                               .agg(訂單數=("order_id", "count"))
+                                               .reset_index()
+                                               .sort_values("nights"))
                     fig2 = px.bar(h_nights, x="nights", y="訂單數",
                                   title="訂購晚數分佈", labels={"nights": "晚數"})
                     st.plotly_chart(fig2, use_container_width=True)
