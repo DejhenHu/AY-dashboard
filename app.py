@@ -75,7 +75,7 @@ with st.sidebar:
     this_week_sun = today - timedelta(days=days_since_sunday)
     last_week_sun = this_week_sun - timedelta(days=7)
 
-    _PRESET_OPTS = ["自訂", "本週", "前一週", "近7天", "近30天", "近90天"]
+    _PRESET_OPTS = ["自訂", "昨天", "本週", "前一週", "近7天", "近30天", "近90天"]
     _preset_url  = st.query_params.get("preset", "本週")
     if _preset_url not in _PRESET_OPTS:
         _preset_url = "本週"
@@ -88,7 +88,10 @@ with st.sidebar:
                           key="preset_sel",
                           on_change=_on_preset_change)
 
-    if preset == "本週":
+    if preset == "昨天":
+        default_start = today - timedelta(days=1)
+        default_end = today - timedelta(days=1)
+    elif preset == "本週":
         default_start = this_week_sun
         default_end = min(this_week_sun + timedelta(days=6), max_date)
     elif preset == "前一週":
