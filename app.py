@@ -81,7 +81,28 @@ with st.sidebar:
         _preset_url = "本週"
 
     def _on_preset_change():
-        st.query_params["preset"] = st.session_state.preset_sel
+        p = st.session_state.preset_sel
+        st.query_params["preset"] = p
+        if p == "自訂":
+            return
+        # 直接算出新日期並寫入 session_state，讓 date_input 立即更新
+        if p == "昨天":
+            ns, ne = today - timedelta(days=1), today - timedelta(days=1)
+        elif p == "本週":
+            ns, ne = this_week_sun, min(this_week_sun + timedelta(days=6), max_date)
+        elif p == "前一週":
+            ns, ne = last_week_sun, this_week_sun - timedelta(days=1)
+        elif p == "近7天":
+            ns, ne = max_date - timedelta(days=6), max_date
+        elif p == "近30天":
+            ns, ne = max_date - timedelta(days=29), max_date
+        else:  # 近90天
+            ns, ne = max_date - timedelta(days=89), max_date
+        st.session_state["date_start"] = ns
+        st.session_state["date_end"]   = ne
+        for k in ["start", "end"]:
+            if k in st.query_params:
+                del st.query_params[k]
 
     preset = st.selectbox("快速選擇日期", _PRESET_OPTS,
                           index=_PRESET_OPTS.index(_preset_url),
