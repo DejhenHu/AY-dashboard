@@ -684,6 +684,44 @@ elif page == "🏠 住宿 & 露營":
                 else:
                     st.info("目前篩選範圍內無星野飯店訂單。")
 
+            # ── 產品排行 ──────────────────────────────────
+            st.divider()
+            rank_cur = (sub.groupby(["bnb_id", "bnb_name", "bnb_city"])
+                           .agg(訂單數=("order_id", "count"), GMV=("twd_amount", "sum"))
+                           .reset_index()
+                           .rename(columns={"bnb_id": "BNB ID", "bnb_name": "商品名稱",
+                                            "bnb_city": "所在城市"}))
+            rank_prev = (sub_prev.groupby("bnb_id")["order_id"].count()
+                                 .reset_index(name="前期訂單數")
+                                 .rename(columns={"bnb_id": "BNB ID"}))
+            rank_full = rank_cur.merge(rank_prev, on="BNB ID", how="left").fillna({"前期訂單數": 0})
+            rank_full["前期訂單數"] = rank_full["前期訂單數"].astype(int)
+            rank_full["成長數"] = rank_full["訂單數"] - rank_full["前期訂單數"]
+            rank_full["GMV"] = rank_full["GMV"].apply(lambda v: f"NT${v:,.0f}")
+
+            st.subheader("① 訂單數排行（前10）")
+            tbl1 = (rank_full[["BNB ID", "商品名稱", "所在城市", "訂單數", "GMV"]]
+                    .sort_values("訂單數", ascending=False)
+                    .head(10)
+                    .reset_index(drop=True))
+            tbl1.index += 1
+            st.dataframe(tbl1, use_container_width=True)
+
+            st.subheader("② 成長數排行（前10）")
+            tbl2 = (rank_full[["BNB ID", "商品名稱", "所在城市", "訂單數", "前期訂單數", "成長數", "GMV"]]
+                    .sort_values("成長數", ascending=False)
+                    .head(10)
+                    .reset_index(drop=True))
+            tbl2.index += 1
+            st.dataframe(
+                tbl2.style.map(
+                    lambda v: "color: green; font-weight: bold" if v > 0
+                              else ("color: red; font-weight: bold" if v < 0 else ""),
+                    subset=["成長數"]
+                ).format({"成長數": "{:+d}"}),
+                use_container_width=True
+            )
+
 # ════════════════════════════════════════════════════════
 # SEB
 # ════════════════════════════════════════════════════════
