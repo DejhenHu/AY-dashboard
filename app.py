@@ -27,19 +27,41 @@ with st.spinner("載入資料中..."):
 # ── 側邊欄篩選 ────────────────────────────────────────────
 with st.sidebar:
     affiliate_options = dp.get_affiliate_options(df_all)
+
+    # 從 URL 還原行銷管道選擇（多選用 | 分隔儲存）
+    _aff_url = st.query_params.get("affiliates", "")
+    _aff_default = [a for a in _aff_url.split("|") if a in affiliate_options] if _aff_url else []
+
+    def _on_aff_change():
+        vals = st.session_state.aff_sel
+        st.query_params["affiliates"] = "|".join(vals) if vals else ""
+
     selected_affiliates = st.multiselect(
         "行銷管道（Affiliate ID）",
         options=affiliate_options,
-        default=None,
-        placeholder="不選 = 顯示全部"
+        default=_aff_default,
+        placeholder="不選 = 顯示全部",
+        key="aff_sel",
+        on_change=_on_aff_change
     )
 
     st.divider()
-    page = st.selectbox("頁面導覽", [
+    _PAGES = [
         "📊 總覽", "🚢 郵輪", "🌍 GIT",
         "🏠 住宿 & 露營", "🏃 SEB", "🚄 高鐵",
         "📱 eSIM", "🗺️ Day Tour", "📣 行銷管道", "💡 自動洞察"
-    ])
+    ]
+    _cur = st.query_params.get("page", _PAGES[0])
+    if _cur not in _PAGES:
+        _cur = _PAGES[0]
+
+    def _on_page_change():
+        st.query_params["page"] = st.session_state.nav_page
+
+    page = st.selectbox("頁面導覽", _PAGES,
+                        index=_PAGES.index(_cur),
+                        key="nav_page",
+                        on_change=_on_page_change)
 
     st.divider()
     st.header("篩選條件")
@@ -53,9 +75,18 @@ with st.sidebar:
     this_week_sun = today - timedelta(days=days_since_sunday)
     last_week_sun = this_week_sun - timedelta(days=7)
 
-    preset = st.selectbox("快速選擇日期", [
-        "自訂", "本週", "前一週", "近7天", "近30天", "近90天"
-    ], index=1)
+    _PRESET_OPTS = ["自訂", "本週", "前一週", "近7天", "近30天", "近90天"]
+    _preset_url  = st.query_params.get("preset", "本週")
+    if _preset_url not in _PRESET_OPTS:
+        _preset_url = "本週"
+
+    def _on_preset_change():
+        st.query_params["preset"] = st.session_state.preset_sel
+
+    preset = st.selectbox("快速選擇日期", _PRESET_OPTS,
+                          index=_PRESET_OPTS.index(_preset_url),
+                          key="preset_sel",
+                          on_change=_on_preset_change)
 
     if preset == "本週":
         default_start = this_week_sun
@@ -76,8 +107,27 @@ with st.sidebar:
         default_start = max(min_date, max_date - timedelta(days=90))
         default_end = max_date
 
-    start_date = st.date_input("下單日期（起）", value=default_start, min_value=min_date, max_value=max_date)
-    end_date = st.date_input("下單日期（迄）", value=default_end, min_value=min_date, max_value=max_date)
+    # 從 URL 還原日期（重新整理時使用）
+    try:
+        default_start = date.fromisoformat(st.query_params["start"])
+    except (KeyError, ValueError):
+        pass
+    try:
+        default_end = date.fromisoformat(st.query_params["end"])
+    except (KeyError, ValueError):
+        pass
+
+    def _on_date_change():
+        st.query_params["start"]  = str(st.session_state.date_start)
+        st.query_params["end"]    = str(st.session_state.date_end)
+        st.query_params["preset"] = "自訂"
+
+    start_date = st.date_input("下單日期（起）", value=default_start,
+                               min_value=min_date, max_value=max_date,
+                               key="date_start", on_change=_on_date_change)
+    end_date   = st.date_input("下單日期（迄）", value=default_end,
+                               min_value=min_date, max_value=max_date,
+                               key="date_end", on_change=_on_date_change)
 
     _n = (end_date - start_date).days + 1
     _pe = start_date - timedelta(days=1)
@@ -133,7 +183,7 @@ def kpi(col, label: str, current: float, prev: float, fmt: str = "money"):
 
 
 # ── 圖表 helper ───────────────────────────────────────────
-_MAX_LABEL = 22
+_MAX_LABEL = 16
 
 
 def hbar(df: pd.DataFrame, x: str, y: str, title: str, **kwargs) -> "go.Figure":
@@ -145,6 +195,10 @@ def hbar(df: pd.DataFrame, x: str, y: str, title: str, **kwargs) -> "go.Figure":
         lambda s: s[:_MAX_LABEL] + "…" if len(s) > _MAX_LABEL else s
     )
     n = len(df)
+    # 依截斷後最長標籤動態計算 margin（中文約 14px/字）
+    max_len = df[y].str.len().max() if n > 0 else _MAX_LABEL
+    left_margin = max_len * 14 + 30
+
     fig = px.bar(df, x=x, y=y, orientation="h", title=title,
                  labels={y: ""}, hover_data={full_col: True, y: False},
                  **kwargs)
@@ -152,7 +206,7 @@ def hbar(df: pd.DataFrame, x: str, y: str, title: str, **kwargs) -> "go.Figure":
     fig.update_yaxes(autorange="reversed", automargin=False, tickfont_size=12)
     fig.update_layout(
         height=max(360, n * 34 + 80),
-        margin=dict(l=220, r=20, t=40, b=40),
+        margin=dict(l=left_margin, r=20, t=40, b=40),
     )
     return fig
 
