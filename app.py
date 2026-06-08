@@ -320,7 +320,33 @@ if page == "📊 總覽":
     st.plotly_chart(fig3, use_container_width=True)
 
     st.subheader("各產品線明細")
-    st.dataframe(pl_df, use_container_width=True)
+    prev_pl = (df_prev.groupby("product_line")
+                      .agg(前期訂單數=("order_id", "count"), 前期營收=("twd_amount", "sum"))
+                      .reset_index()
+                      .rename(columns={"product_line": "product_line"}))
+    detail = pl_df.merge(prev_pl, on="product_line", how="left").fillna({"前期訂單數": 0, "前期營收": 0})
+    detail["前期訂單數"] = detail["前期訂單數"].astype(int)
+    detail["訂單數差異"] = detail["訂單數"] - detail["前期訂單數"]
+    detail["營收差異"]   = detail["營收"]   - detail["前期營收"]
+    detail = detail[["product_line", "訂單數", "前期訂單數", "訂單數差異", "營收", "前期營收", "營收差異"]]
+    detail = detail.rename(columns={"product_line": "產品線"})
+
+    def _cdiff(val):
+        if val > 0:   return "color: green; font-weight: bold"
+        elif val < 0: return "color: red; font-weight: bold"
+        return ""
+
+    st.dataframe(
+        detail.style
+              .map(_cdiff, subset=["訂單數差異", "營收差異"])
+              .format({
+                  "訂單數差異": "{:+,.0f}",
+                  "營收差異":   "NT${:+,.0f}",
+                  "營收":       "NT${:,.0f}",
+                  "前期營收":   "NT${:,.0f}",
+              }),
+        use_container_width=True, hide_index=True
+    )
 
 # ════════════════════════════════════════════════════════
 # 郵輪
