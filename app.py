@@ -443,6 +443,24 @@ elif page == "🏠 住宿 & 露營":
                               labels={"check_in_month": "入住月份"})
                 st.plotly_chart(fig2, use_container_width=True)
 
+            if pl == "TW":
+                st.subheader("住宿類型分佈")
+                type_df = (sub.groupby("bnb_type")
+                              .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
+                              .reset_index()
+                              .sort_values("營收", ascending=False))
+                tc1, tc2 = st.columns(2)
+                with tc1:
+                    fig_t = px.bar(type_df, x="bnb_type", y="訂單數", color="bnb_type",
+                                   title="住宿類型（訂單數）", text_auto=True)
+                    fig_t.update_layout(showlegend=False)
+                    st.plotly_chart(fig_t, use_container_width=True)
+                with tc2:
+                    fig_t2 = px.bar(type_df, x="bnb_type", y="營收", color="bnb_type",
+                                    title="住宿類型（營收）", text_auto=".2s")
+                    fig_t2.update_layout(showlegend=False)
+                    st.plotly_chart(fig_t2, use_container_width=True)
+
             if pl == "JP":
                 st.subheader("星野飯店訂單")
                 hoshino = sub[sub["bnb_name"].str.contains("星野|Hoshino", case=False, na=False)]
