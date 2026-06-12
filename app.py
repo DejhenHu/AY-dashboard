@@ -409,7 +409,7 @@ elif page == "🚢 郵輪":
                 BRAND_COLORS = {"麗星郵輪": "#1f77b4", "MSC地中海": "#ff7f0e", "歌詩達": "#2ca02c"}
                 homeport_b = homeport_df.copy()
                 homeport_b["品牌"] = homeport_b["bnb_name"].apply(dp._cruise_brand)
-                homeport_b["船"]   = homeport_b["bnb_name"].apply(dp._cruise_ship)
+                homeport_b["船"]   = homeport_b["bnb_name"].apply(dp._homeport_ship)
                 homeport_b["天數"] = (homeport_b["nights"] + 1).astype(str) + " 天"
                 brand_days = (homeport_b.groupby(["品牌", "天數"])
                                         .agg(營收=("twd_amount", "sum"))
@@ -423,7 +423,7 @@ elif page == "🚢 郵輪":
                 homeport_ci = homeport_df.copy()
                 homeport_ci["check_in_month"] = homeport_ci["check_in"].dt.to_period("M").astype(str)
                 homeport_ci["品牌"] = homeport_ci["bnb_name"].apply(dp._cruise_brand)
-                homeport_ci["船"]   = homeport_ci["bnb_name"].apply(dp._cruise_ship)
+                homeport_ci["船"]   = homeport_ci["bnb_name"].apply(dp._homeport_ship)
                 ci_home = (homeport_ci.groupby(["check_in_month", "品牌"])
                                       .agg(訂單數=("order_id", "count"))
                                       .reset_index())
@@ -436,7 +436,7 @@ elif page == "🚢 郵輪":
                 # ── 各船統整 ──────────────────────────────
                 hp_prev = cruise_prev[cruise_prev["cruise_type"] == "母港出發"].copy()
                 hp_prev["品牌"] = hp_prev["bnb_name"].apply(dp._cruise_brand)
-                hp_prev["船"]   = hp_prev["bnb_name"].apply(dp._cruise_ship)
+                hp_prev["船"]   = hp_prev["bnb_name"].apply(dp._homeport_ship)
 
                 def color_diff(val):
                     if val > 0:   return "color: green; font-weight: bold"

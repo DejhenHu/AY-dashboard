@@ -14,7 +14,8 @@ ACCOMMODATION_TYPES = {
     "Hotel", "Motel", "Serviced apartment", "Villa"
 }
 
-HOMEPORT_CRUISE_KEYWORDS = ["麗星", "star cruises", "探索星號", "msc", "地中海郵輪", "歌詩達", "costa"]
+HOMEPORT_CRUISE_KEYWORDS = ["麗星", "star cruises", "探索星號", "msc", "地中海郵輪",
+                            "歌詩達", "costa", "三井", "富士"]
 
 DAY_TOUR_TYPES = {"Attraction Tickets", "Land tour", "Tours & Experiences", "Transportation"}
 
@@ -195,7 +196,27 @@ def _cruise_brand(name: str) -> str:
         return "挪威郵輪"
     if "皇后" in n or "cunard" in n:
         return "皇后郵輪"
+    if "三井" in n or "富士" in n:
+        return "三井"
     return "其他郵輪"
+
+
+# 母港郵輪船隊固定為這幾艘：品牌關鍵字 → 標準船名
+_HOMEPORT_FLEET = [
+    (("三井", "富士"),                  "海洋富士號"),
+    (("msc", "地中海"),                 "地中海榮耀號"),
+    (("歌詩達", "costa"),               "莎倫娜號"),
+    (("麗星", "探索", "star cruises"),  "探索星號"),
+]
+
+
+def _homeport_ship(name: str) -> str:
+    """母港郵輪：依品牌關鍵字對應到固定船名（雜項命名一併歸位）。"""
+    n = str(name).lower()
+    for keywords, ship in _HOMEPORT_FLEET:
+        if any(kw in n for kw in keywords):
+            return ship
+    return _cruise_ship(name)
 
 
 _SHIP_RE = re.compile(r"([一-鿿A-Za-z]+號)")
