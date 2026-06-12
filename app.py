@@ -409,6 +409,7 @@ elif page == "🚢 郵輪":
                 BRAND_COLORS = {"麗星郵輪": "#1f77b4", "MSC地中海": "#ff7f0e", "歌詩達": "#2ca02c"}
                 homeport_b = homeport_df.copy()
                 homeport_b["品牌"] = homeport_b["bnb_name"].apply(dp._cruise_brand)
+                homeport_b["船"]   = homeport_b["bnb_name"].apply(dp._cruise_ship)
                 homeport_b["天數"] = (homeport_b["nights"] + 1).astype(str) + " 天"
                 brand_days = (homeport_b.groupby(["品牌", "天數"])
                                         .agg(營收=("twd_amount", "sum"))
@@ -422,6 +423,7 @@ elif page == "🚢 郵輪":
                 homeport_ci = homeport_df.copy()
                 homeport_ci["check_in_month"] = homeport_ci["check_in"].dt.to_period("M").astype(str)
                 homeport_ci["品牌"] = homeport_ci["bnb_name"].apply(dp._cruise_brand)
+                homeport_ci["船"]   = homeport_ci["bnb_name"].apply(dp._cruise_ship)
                 ci_home = (homeport_ci.groupby(["check_in_month", "品牌"])
                                       .agg(訂單數=("order_id", "count"))
                                       .reset_index())
@@ -434,6 +436,7 @@ elif page == "🚢 郵輪":
                 # ── 各船統整 ──────────────────────────────
                 hp_prev = cruise_prev[cruise_prev["cruise_type"] == "母港出發"].copy()
                 hp_prev["品牌"] = hp_prev["bnb_name"].apply(dp._cruise_brand)
+                hp_prev["船"]   = hp_prev["bnb_name"].apply(dp._cruise_ship)
 
                 def color_diff(val):
                     if val > 0:   return "color: green; font-weight: bold"
@@ -449,16 +452,16 @@ elif page == "🚢 郵輪":
                 homeport_b2 = homeport_b.copy()
                 hp_prev_days = hp_prev.copy()
                 hp_prev_days["天數"] = (hp_prev_days["nights"] + 1).astype(str) + " 天"
-                days_cur_g  = homeport_b2.groupby(["品牌","天數"])["order_id"].count().reset_index(name="本期")
-                days_prev_g = hp_prev_days.groupby(["品牌","天數"])["order_id"].count().reset_index(name="前期")
-                days_wide   = (days_cur_g.merge(days_prev_g, on=["品牌","天數"], how="outer")
+                days_cur_g  = homeport_b2.groupby(["品牌","船","天數"])["order_id"].count().reset_index(name="本期")
+                days_prev_g = hp_prev_days.groupby(["品牌","船","天數"])["order_id"].count().reset_index(name="前期")
+                days_wide   = (days_cur_g.merge(days_prev_g, on=["品牌","船","天數"], how="outer")
                                          .fillna(0).astype({"本期":int,"前期":int}))
                 days_wide["差異"] = days_wide["本期"] - days_wide["前期"]
                 days_wide["abs差"] = days_wide["差異"].abs()
 
-                mon_cur_g  = cur_mon.groupby(["品牌","check_in_month"])["order_id"].count().reset_index(name="本期")
-                mon_prev_g = prev_mon.groupby(["品牌","check_in_month"])["order_id"].count().reset_index(name="前期")
-                mon_wide   = (mon_cur_g.merge(mon_prev_g, on=["品牌","check_in_month"], how="outer")
+                mon_cur_g  = cur_mon.groupby(["品牌","船","check_in_month"])["order_id"].count().reset_index(name="本期")
+                mon_prev_g = prev_mon.groupby(["品牌","船","check_in_month"])["order_id"].count().reset_index(name="前期")
+                mon_wide   = (mon_cur_g.merge(mon_prev_g, on=["品牌","船","check_in_month"], how="outer")
                                        .fillna(0).astype({"本期":int,"前期":int})
                                        .rename(columns={"check_in_month":"出發月份"}))
                 mon_wide["差異"] = mon_wide["本期"] - mon_wide["前期"]
@@ -473,10 +476,10 @@ elif page == "🚢 郵輪":
                     d["score"] = d["abs差"] * d["abs成長率"].pow(0.5)
                     return d
 
-                def brand_main_reason(brand):
+                def brand_main_reason(brand, ship):
                     parts = []
                     for wide, dim in [(days_wide, "天數"), (mon_wide, "出發月份")]:
-                        sub = _score_df(wide[wide["品牌"] == brand])
+                        sub = _score_df(wide[(wide["品牌"] == brand) & (wide["船"] == ship)])
                         cands = sub[sub["abs差"] >= 3]
                         if cands.empty: continue
                         best = cands.loc[cands["score"].idxmax()]
@@ -485,13 +488,15 @@ elif page == "🚢 郵輪":
                         parts.append(f"{dim}：{best[dim]} {arrow}{int(abs(best['差異']))}單（{rate}）")
                     return " / ".join(parts) if parts else "–"
 
-                # 訂單數本期 vs 前期（無標頭）
-                ord_cur  = homeport_ci.groupby("品牌")["order_id"].count().rename("本期")
-                ord_prev = hp_prev.groupby("品牌")["order_id"].count().rename("前期")
+                # 訂單數本期 vs 前期（依品牌+船）
+                ord_cur  = homeport_ci.groupby(["品牌","船"])["order_id"].count().rename("本期")
+                ord_prev = hp_prev.groupby(["品牌","船"])["order_id"].count().rename("前期")
                 ord_tbl  = pd.concat([ord_cur, ord_prev], axis=1).fillna(0).astype(int)
                 ord_tbl["差異"] = ord_tbl["本期"] - ord_tbl["前期"]
-                ord_tbl = ord_tbl.reset_index()
-                ord_tbl["主要影響"] = ord_tbl["品牌"].apply(brand_main_reason)
+                ord_tbl = (ord_tbl.reset_index()
+                                  .sort_values(["品牌","本期"], ascending=[True, False]))
+                ord_tbl["主要影響"] = ord_tbl.apply(
+                    lambda r: brand_main_reason(r["品牌"], r["船"]), axis=1)
                 st.dataframe(
                     ord_tbl.style.map(color_diff, subset=["差異"])
                                  .format({"差異": "{:+d}"}),
@@ -531,6 +536,7 @@ elif page == "🚢 郵輪":
                 fly_ci = fly_df.copy()
                 fly_ci["check_in_month"] = fly_ci["check_in"].dt.to_period("M").astype(str)
                 fly_ci["品牌"] = fly_ci["bnb_name"].apply(dp._cruise_brand)
+                fly_ci["船"]   = fly_ci["bnb_name"].apply(dp._cruise_ship)
                 ci_fly = (fly_ci.groupby(["check_in_month", "品牌"])
                                 .agg(訂單數=("order_id", "count"))
                                 .reset_index())
@@ -538,6 +544,72 @@ elif page == "🚢 郵輪":
                               barmode="stack", title="出發月份 × 船",
                               labels={"check_in_month": "出發月份"})
                 st.plotly_chart(fig3, use_container_width=True)
+
+                # ── 各船統整 ──────────────────────────────
+                fp_b = fp.copy()
+                fp_b["品牌"] = fp_b["bnb_name"].apply(dp._cruise_brand)
+                fp_b["船"]   = fp_b["bnb_name"].apply(dp._cruise_ship)
+                fp_b["check_in_month"] = fp_b["check_in"].dt.to_period("M").astype(str)
+
+                def fly_color_diff(val):
+                    if val > 0:   return "color: green; font-weight: bold"
+                    elif val < 0: return "color: red; font-weight: bold"
+                    return ""
+
+                # 晚數 / 出發月份 兩維度（供主因欄使用，依品牌+船細分）
+                fly_ci_d = fly_ci.copy()
+                fly_ci_d["晚數"] = fly_ci_d["nights"].astype(str) + " 晚"
+                fp_b["晚數"]     = fp_b["nights"].astype(str) + " 晚"
+                f_days_cur  = fly_ci_d.groupby(["品牌","船","晚數"])["order_id"].count().reset_index(name="本期")
+                f_days_prev = fp_b.groupby(["品牌","船","晚數"])["order_id"].count().reset_index(name="前期")
+                f_days_wide = (f_days_cur.merge(f_days_prev, on=["品牌","船","晚數"], how="outer")
+                                         .fillna(0).astype({"本期":int,"前期":int}))
+                f_days_wide["差異"] = f_days_wide["本期"] - f_days_wide["前期"]
+                f_days_wide["abs差"] = f_days_wide["差異"].abs()
+
+                f_mon_cur  = fly_ci.groupby(["品牌","船","check_in_month"])["order_id"].count().reset_index(name="本期")
+                f_mon_prev = fp_b.groupby(["品牌","船","check_in_month"])["order_id"].count().reset_index(name="前期")
+                f_mon_wide = (f_mon_cur.merge(f_mon_prev, on=["品牌","船","check_in_month"], how="outer")
+                                       .fillna(0).astype({"本期":int,"前期":int})
+                                       .rename(columns={"check_in_month":"出發月份"}))
+                f_mon_wide["差異"] = f_mon_wide["本期"] - f_mon_wide["前期"]
+                f_mon_wide["abs差"] = f_mon_wide["差異"].abs()
+
+                def fly_score_df(d):
+                    d = d.copy()
+                    d["成長率"] = d.apply(
+                        lambda r: (r["差異"] / r["前期"] * 100) if r["前期"] > 0 else (
+                            999 if r["差異"] > 0 else -999), axis=1)
+                    d["abs成長率"] = d["成長率"].abs()
+                    d["score"] = d["abs差"] * d["abs成長率"].pow(0.5)
+                    return d
+
+                def fly_main_reason(brand, ship):
+                    parts = []
+                    for wide, dim in [(f_days_wide, "晚數"), (f_mon_wide, "出發月份")]:
+                        sub = fly_score_df(wide[(wide["品牌"] == brand) & (wide["船"] == ship)])
+                        cands = sub[sub["abs差"] >= 3]
+                        if cands.empty: continue
+                        best = cands.loc[cands["score"].idxmax()]
+                        arrow = "▲" if best["差異"] > 0 else "▼"
+                        rate = f"{abs(best['成長率']):.0f}%" if best["前期"] > 0 else "新增"
+                        parts.append(f"{dim}：{best[dim]} {arrow}{int(abs(best['差異']))}單（{rate}）")
+                    return " / ".join(parts) if parts else "–"
+
+                # 訂單數本期 vs 前期（依品牌+船）
+                f_ord_cur  = fly_ci.groupby(["品牌","船"])["order_id"].count().rename("本期")
+                f_ord_prev = fp_b.groupby(["品牌","船"])["order_id"].count().rename("前期")
+                f_ord_tbl  = pd.concat([f_ord_cur, f_ord_prev], axis=1).fillna(0).astype(int)
+                f_ord_tbl["差異"] = f_ord_tbl["本期"] - f_ord_tbl["前期"]
+                f_ord_tbl = (f_ord_tbl.reset_index()
+                                      .sort_values(["品牌","本期"], ascending=[True, False]))
+                f_ord_tbl["主要影響"] = f_ord_tbl.apply(
+                    lambda r: fly_main_reason(r["品牌"], r["船"]), axis=1)
+                st.dataframe(
+                    f_ord_tbl.style.map(fly_color_diff, subset=["差異"])
+                                   .format({"差異": "{:+d}"}),
+                    use_container_width=True, hide_index=True
+                )
 
 # ════════════════════════════════════════════════════════
 # GIT

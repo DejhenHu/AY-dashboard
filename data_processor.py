@@ -1,3 +1,5 @@
+import re
+
 import pandas as pd
 import streamlit as st
 
@@ -194,6 +196,26 @@ def _cruise_brand(name: str) -> str:
     if "皇后" in n or "cunard" in n:
         return "皇后郵輪"
     return "其他郵輪"
+
+
+_SHIP_RE = re.compile(r"([一-鿿A-Za-z]+號)")
+
+
+def _cruise_ship(name: str) -> str:
+    """從商品名稱萃取船名（XX號），並清理黏在前面的品牌字，讓同船的不同命名能合併。"""
+    m = _SHIP_RE.search(str(name))
+    if not m:
+        return "（無船名）"
+    ship = m.group(1)
+    # 去掉黏在船名前的品牌字首
+    for prefix in ["三井海洋", "公主", "名人"]:
+        if ship.startswith(prefix) and len(ship) > len(prefix) + 1:
+            ship = ship[len(prefix):]
+            break
+    # 去掉夾在中間的品牌/連接字
+    for w in ["郵輪", "遊輪", "MSC", "地中海"]:
+        ship = ship.replace(w, "")
+    return ship or "（無船名）"
 
 
 def cruise_by_brand(df: pd.DataFrame) -> pd.DataFrame:
