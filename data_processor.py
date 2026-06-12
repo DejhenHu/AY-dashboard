@@ -67,8 +67,8 @@ def _clean(df: pd.DataFrame) -> pd.DataFrame:
     # 移除公式填充的空白列
     df = df[df["order_id"].notna() & (df["order_id"].astype(str).str.strip() != "")].copy()
 
-    # 排除「補款專用」類項目（補款非真實新訂單，不計入任何頁面統計）
-    df = df[~df["bnb_name"].astype(str).str.contains("補款", na=False)].copy()
+    # 排除「補款專用」「更名手續費」等非真實航次/訂單項目，不計入任何頁面統計
+    df = df[~df["bnb_name"].astype(str).str.contains("補款|更名手續費", na=False)].copy()
 
     df["tags"]           = df["tags"].astype(str).str.lower()
     df["bnb_name_lower"] = df["bnb_name"].astype(str).str.lower()
