@@ -52,6 +52,9 @@ def _clean(df: pd.DataFrame) -> pd.DataFrame:
     # 移除公式填充的空白列
     df = df[df["order_id"].notna() & (df["order_id"].astype(str).str.strip() != "")].copy()
 
+    # 排除「補款專用」類項目（補款非真實新訂單，不計入任何頁面統計）
+    df = df[~df["bnb_name"].astype(str).str.contains("補款", na=False)].copy()
+
     df["tags"]           = df["tags"].astype(str).str.lower()
     df["bnb_name_lower"] = df["bnb_name"].astype(str).str.lower()
     df["product_line"]   = df.apply(_classify, axis=1)
@@ -190,8 +193,6 @@ def _cruise_brand(name: str) -> str:
         return "挪威郵輪"
     if "皇后" in n or "cunard" in n:
         return "皇后郵輪"
-    if "補款" in n:
-        return "(補款/其他)"
     return "其他郵輪"
 
 
