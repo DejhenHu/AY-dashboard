@@ -14,8 +14,20 @@ ACCOMMODATION_TYPES = {
     "Hotel", "Motel", "Serviced apartment", "Villa"
 }
 
-HOMEPORT_CRUISE_KEYWORDS = ["麗星", "star cruises", "探索星號", "msc", "地中海郵輪",
-                            "歌詩達", "costa", "三井", "富士"]
+# ── 郵輪母港 / 飛航 判斷 ──────────────────────────────
+# 同一艘船可能從台灣港出發（母港）或從國外登船（飛航），故優先看名稱裡的出發/登船港，
+# 名稱沒寫港口時，再用「固定從台灣出發的母港船隊」船名來補判。
+
+# 明確標示國外登船 → 飛航
+_FOREIGN_EMBARK_RE = re.compile(
+    r"(新加坡|溫哥華|西雅圖|舊金山|史華德|羅馬|那不勒斯|洛杉磯|香港|義大利)[^，。]{0,5}(登船|上船|出發)")
+# 明確從台灣港出發：基隆/高雄 + 啟航/出發/登船/上船，或括號內(基隆…)，或「基隆-」移航首站
+_TW_DEPART_RE = re.compile(
+    r"[（(](基隆|高雄)|(基隆|高雄)\s*(蘇澳)?\s*(啟航|出發|登船|上船)|(基隆|高雄)\s*[-－]")
+# 泛用登船（前面排除「贈/送/迎」等贈品用語，避免誤判「贈登船迎賓套裝」）
+_GENERIC_EMBARK_RE = re.compile(r"(?<![贈送迎])(登船|上下船|上船)")
+# 固定從台灣出發的母港船隊船名（名稱未標港口時用來補判）
+_TAIWAN_FLEET_SHIPS = ("探索星號", "榮耀號", "莎倫娜號", "海洋富士號", "富士號")
 
 DAY_TOUR_TYPES = {"Attraction Tickets", "Land tour", "Tours & Experiences", "Transportation"}
 
@@ -98,10 +110,19 @@ def _classify(row) -> str:
 def _cruise_type(row) -> str:
     if row.get("product_line") != "Cruise":
         return ""
-    name = str(row.get("bnb_name", "")).lower()
-    for kw in HOMEPORT_CRUISE_KEYWORDS:
-        if kw.lower() in name:
-            return "母港出發"
+    name = str(row.get("bnb_name", ""))
+    # 1) 名稱明確標示國外登船 → 飛航（即使母港船隊的船做國外移航也算）
+    if _FOREIGN_EMBARK_RE.search(name):
+        return "飛航郵輪"
+    # 2) 名稱明確從台灣港出發 → 母港
+    if _TW_DEPART_RE.search(name):
+        return "母港出發"
+    # 3) 其他泛用登船字眼（非台灣）→ 飛航
+    if _GENERIC_EMBARK_RE.search(name):
+        return "飛航郵輪"
+    # 4) 名稱未標港口：用母港船隊船名補判
+    if any(s in name for s in _TAIWAN_FLEET_SHIPS):
+        return "母港出發"
     return "飛航郵輪"
 
 
