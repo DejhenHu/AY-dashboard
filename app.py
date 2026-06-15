@@ -293,6 +293,54 @@ def render_simple_tab(sub_df: pd.DataFrame, label: str,
             st.plotly_chart(fig_plat, use_container_width=True)
 
 
+def render_rank_tables(sub: pd.DataFrame, sub_prev: pd.DataFrame,
+                       with_city: bool = True):
+    """商品「訂單數排行」與「成長數排行」前10名表格（與住宿頁一致）。"""
+    if sub.empty:
+        return
+    if sub_prev is None:
+        sub_prev = pd.DataFrame(columns=sub.columns)
+
+    group_cols = ["bnb_id", "bnb_name"] + (["bnb_city"] if with_city else [])
+    rename = {"bnb_id": "BNB ID", "bnb_name": "商品名稱", "bnb_city": "所在城市"}
+    city_cols = ["所在城市"] if with_city else []
+
+    rank_cur = (sub.groupby(group_cols)
+                   .agg(訂單數=("order_id", "count"), GMV=("twd_amount", "sum"))
+                   .reset_index()
+                   .rename(columns=rename))
+    rank_prev = (sub_prev.groupby("bnb_id")["order_id"].count()
+                         .reset_index(name="前期訂單數")
+                         .rename(columns={"bnb_id": "BNB ID"}))
+    rank_full = rank_cur.merge(rank_prev, on="BNB ID", how="left").fillna({"前期訂單數": 0})
+    rank_full["前期訂單數"] = rank_full["前期訂單數"].astype(int)
+    rank_full["成長數"] = rank_full["訂單數"] - rank_full["前期訂單數"]
+    rank_full["GMV"] = rank_full["GMV"].apply(lambda v: f"NT${v:,.0f}")
+
+    st.subheader("① 訂單數排行（前10）")
+    tbl1 = (rank_full[["BNB ID", "商品名稱", *city_cols, "訂單數", "GMV"]]
+            .sort_values("訂單數", ascending=False)
+            .head(10)
+            .reset_index(drop=True))
+    tbl1.index += 1
+    st.dataframe(tbl1, use_container_width=True)
+
+    st.subheader("② 成長數排行（前10）")
+    tbl2 = (rank_full[["BNB ID", "商品名稱", *city_cols, "訂單數", "前期訂單數", "成長數", "GMV"]]
+            .sort_values("成長數", ascending=False)
+            .head(10)
+            .reset_index(drop=True))
+    tbl2.index += 1
+    st.dataframe(
+        tbl2.style.map(
+            lambda v: "color: green; font-weight: bold" if v > 0
+                      else ("color: red; font-weight: bold" if v < 0 else ""),
+            subset=["成長數"]
+        ).format({"成長數": "{:+d}"}),
+        use_container_width=True
+    )
+
+
 st.subheader(page)
 
 
@@ -637,6 +685,9 @@ elif page == "🌍 GIT":
                           labels={"check_in_month": "出發月份"})
             st.plotly_chart(fig2, use_container_width=True)
 
+        st.divider()
+        render_rank_tables(git_df, git_prev, with_city=False)
+
 # ════════════════════════════════════════════════════════
 # 住宿 & 露營
 # ════════════════════════════════════════════════════════
@@ -703,48 +754,18 @@ elif page == "🏠 住宿 & 露營":
 
             # ── 產品排行 ──────────────────────────────────
             st.divider()
-            rank_cur = (sub.groupby(["bnb_id", "bnb_name", "bnb_city"])
-                           .agg(訂單數=("order_id", "count"), GMV=("twd_amount", "sum"))
-                           .reset_index()
-                           .rename(columns={"bnb_id": "BNB ID", "bnb_name": "商品名稱",
-                                            "bnb_city": "所在城市"}))
-            rank_prev = (sub_prev.groupby("bnb_id")["order_id"].count()
-                                 .reset_index(name="前期訂單數")
-                                 .rename(columns={"bnb_id": "BNB ID"}))
-            rank_full = rank_cur.merge(rank_prev, on="BNB ID", how="left").fillna({"前期訂單數": 0})
-            rank_full["前期訂單數"] = rank_full["前期訂單數"].astype(int)
-            rank_full["成長數"] = rank_full["訂單數"] - rank_full["前期訂單數"]
-            rank_full["GMV"] = rank_full["GMV"].apply(lambda v: f"NT${v:,.0f}")
-
-            st.subheader("① 訂單數排行（前10）")
-            tbl1 = (rank_full[["BNB ID", "商品名稱", "所在城市", "訂單數", "GMV"]]
-                    .sort_values("訂單數", ascending=False)
-                    .head(10)
-                    .reset_index(drop=True))
-            tbl1.index += 1
-            st.dataframe(tbl1, use_container_width=True)
-
-            st.subheader("② 成長數排行（前10）")
-            tbl2 = (rank_full[["BNB ID", "商品名稱", "所在城市", "訂單數", "前期訂單數", "成長數", "GMV"]]
-                    .sort_values("成長數", ascending=False)
-                    .head(10)
-                    .reset_index(drop=True))
-            tbl2.index += 1
-            st.dataframe(
-                tbl2.style.map(
-                    lambda v: "color: green; font-weight: bold" if v > 0
-                              else ("color: red; font-weight: bold" if v < 0 else ""),
-                    subset=["成長數"]
-                ).format({"成長數": "{:+d}"}),
-                use_container_width=True
-            )
+            render_rank_tables(sub, sub_prev, with_city=True)
 
 # ════════════════════════════════════════════════════════
 # SEB
 # ════════════════════════════════════════════════════════
 elif page == "🏃 SEB":
-    render_simple_tab(df[df["product_line"] == "SEB"], "SEB",
-                      prev_df=df_prev[df_prev["product_line"] == "SEB"])
+    seb_df   = df[df["product_line"] == "SEB"]
+    seb_prev = df_prev[df_prev["product_line"] == "SEB"]
+    render_simple_tab(seb_df, "SEB", prev_df=seb_prev)
+    if not seb_df.empty:
+        st.divider()
+        render_rank_tables(seb_df, seb_prev, with_city=False)
 
 # ════════════════════════════════════════════════════════
 # 高鐵
