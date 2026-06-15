@@ -341,6 +341,27 @@ def render_rank_tables(sub: pd.DataFrame, sub_prev: pd.DataFrame,
     )
 
 
+def render_cruise_rank(sub: pd.DataFrame, sub_prev: pd.DataFrame,
+                       ship_fn, key: str):
+    """郵輪航次排行：上方可依「船（號）」篩選，再出訂單數/成長數排行表。"""
+    if sub.empty:
+        return
+    sub = sub.copy()
+    sub["船"] = sub["bnb_name"].apply(ship_fn)
+    prev = sub_prev.copy() if sub_prev is not None else pd.DataFrame(columns=sub.columns)
+    if not prev.empty:
+        prev["船"] = prev["bnb_name"].apply(ship_fn)
+
+    ships = sorted(sub["船"].dropna().unique().tolist())
+    sel = st.multiselect("篩選船（號）", ships, key=key,
+                         placeholder="不選 = 顯示全部船")
+    if sel:
+        sub = sub[sub["船"].isin(sel)]
+        if not prev.empty:
+            prev = prev[prev["船"].isin(sel)]
+    render_rank_tables(sub, prev, with_city=False)
+
+
 st.subheader(page)
 
 
@@ -551,6 +572,9 @@ elif page == "🚢 郵輪":
                     use_container_width=True, hide_index=True
                 )
 
+                st.divider()
+                render_cruise_rank(homeport_df, hp, dp._homeport_ship, "hp_rank_ship")
+
         # ── 飛航郵輪 ──────────────────────────────────────
         with ctab_fly:
             if fly_df.empty:
@@ -658,6 +682,9 @@ elif page == "🚢 郵輪":
                                    .format({"差異": "{:+d}"}),
                     use_container_width=True, hide_index=True
                 )
+
+                st.divider()
+                render_cruise_rank(fly_df, fp, dp._cruise_ship, "fly_rank_ship")
 
 # ════════════════════════════════════════════════════════
 # GIT
