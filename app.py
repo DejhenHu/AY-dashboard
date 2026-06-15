@@ -362,6 +362,17 @@ def render_cruise_rank(sub: pd.DataFrame, sub_prev: pd.DataFrame,
     render_rank_tables(sub, prev, with_city=False)
 
 
+# 各船統整表欄寬：數值欄窄、主要影響加寬，避免文字被截斷
+_SHIP_TBL_COLCFG = {
+    "品牌":   st.column_config.Column(width=90),
+    "船":     st.column_config.Column(width=130),
+    "本期":   st.column_config.Column(width=70),
+    "前期":   st.column_config.Column(width=70),
+    "差異":   st.column_config.Column(width=70),
+    "主要影響": st.column_config.Column(width=460),
+}
+
+
 st.subheader(page)
 
 
@@ -569,7 +580,8 @@ elif page == "🚢 郵輪":
                 st.dataframe(
                     ord_tbl.style.map(color_diff, subset=["差異"])
                                  .format({"差異": "{:+d}"}),
-                    use_container_width=True, hide_index=True
+                    use_container_width=True, hide_index=True,
+                    column_config=_SHIP_TBL_COLCFG
                 )
 
                 st.divider()
@@ -680,7 +692,8 @@ elif page == "🚢 郵輪":
                 st.dataframe(
                     f_ord_tbl.style.map(fly_color_diff, subset=["差異"])
                                    .format({"差異": "{:+d}"}),
-                    use_container_width=True, hide_index=True
+                    use_container_width=True, hide_index=True,
+                    column_config=_SHIP_TBL_COLCFG
                 )
 
                 st.divider()
