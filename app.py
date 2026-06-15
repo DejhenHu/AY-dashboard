@@ -837,20 +837,6 @@ elif page == "🗺️ Day Tour":
 # ════════════════════════════════════════════════════════
 elif page == "📣 行銷管道":
     ch_df = dp.marketing_channel(df)
-    top_channels = ch_df.groupby("channel")["營收"].sum().sort_values(ascending=False).head(15).index
-    ch_top = ch_df[ch_df["channel"].isin(top_channels)]
-
-    ch_rev = (ch_top.groupby("channel")["營收"].sum()
-                    .reset_index().sort_values("營收", ascending=False))
-    fig = hbar(ch_rev, x="營收", y="channel", title="行銷管道營收（前15）")
-    st.plotly_chart(fig, use_container_width=True)
-
-    ch_stack = (ch_top.groupby(["channel", "product_line"])["營收"].sum()
-                      .reset_index()
-                      .sort_values("營收", ascending=False))
-    fig2 = hbar(ch_stack, x="營收", y="channel", title="行銷管道 × 產品線",
-                color="product_line", barmode="stack")
-    st.plotly_chart(fig2, use_container_width=True)
 
     # ── 管道別 本期 vs 前期（訂單數 / GMV / AOV）──────────────
     st.subheader("管道別 本期 vs 前期")
