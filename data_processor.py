@@ -294,12 +294,27 @@ def checkin_monthly(df: pd.DataFrame, product_line: str) -> pd.DataFrame:
                .reset_index())
 
 
-def marketing_channel(df: pd.DataFrame) -> pd.DataFrame:
-    ch = df.copy()
-    ch["channel"] = ch["affiliate_id"].apply(
+def _channel_col(df: pd.DataFrame) -> pd.Series:
+    return df["affiliate_id"].apply(
         lambda x: x if str(x).strip() not in ("", "-", "0", "nan") else "直接/未知"
     )
+
+
+def marketing_channel(df: pd.DataFrame) -> pd.DataFrame:
+    ch = df.copy()
+    ch["channel"] = _channel_col(ch)
     return (ch.groupby(["channel", "product_line"])
               .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
               .reset_index()
               .sort_values("營收", ascending=False))
+
+
+def channel_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """各管道別的訂單數、GMV、AOV（單一期間）。"""
+    ch = df.copy()
+    ch["channel"] = _channel_col(ch)
+    g = (ch.groupby("channel")
+           .agg(訂單數=("order_id", "count"), GMV=("twd_amount", "sum"))
+           .reset_index())
+    g["AOV"] = (g["GMV"] / g["訂單數"]).fillna(0)
+    return g

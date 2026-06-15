@@ -852,7 +852,44 @@ elif page == "📣 行銷管道":
                 color="product_line", barmode="stack")
     st.plotly_chart(fig2, use_container_width=True)
 
-    st.subheader("管道明細")
+    # ── 管道別 本期 vs 前期（訂單數 / GMV / AOV）──────────────
+    st.subheader("管道別 本期 vs 前期")
+    cur_s  = dp.channel_summary(df).rename(columns={
+        "訂單數": "訂單數", "GMV": "GMV", "AOV": "AOV"})
+    prev_s = dp.channel_summary(df_prev).rename(columns={
+        "訂單數": "前期訂單數", "GMV": "前期GMV", "AOV": "前期AOV"})
+    cmp = cur_s.merge(prev_s, on="channel", how="left").fillna(0)
+    cmp["訂單差"] = cmp["訂單數"] - cmp["前期訂單數"].astype(int)
+    cmp["GMV差"]  = cmp["GMV"]   - cmp["前期GMV"]
+    cmp["AOV差"]  = cmp["AOV"]   - cmp["前期AOV"]
+    cmp = cmp.sort_values("GMV", ascending=False).reset_index(drop=True)
+    cmp = cmp[["channel",
+               "訂單數", "前期訂單數", "訂單差",
+               "GMV", "前期GMV", "GMV差",
+               "AOV", "前期AOV", "AOV差"]].rename(columns={"channel": "管道"})
+
+    def _cdiff(val):
+        if val > 0:   return "color: green; font-weight: bold"
+        elif val < 0: return "color: red; font-weight: bold"
+        return ""
+
+    st.dataframe(
+        cmp.style
+           .map(_cdiff, subset=["訂單差", "GMV差", "AOV差"])
+           .format({
+               "前期訂單數": "{:,.0f}",
+               "訂單差":     "{:+,.0f}",
+               "GMV":        "NT${:,.0f}",
+               "前期GMV":    "NT${:,.0f}",
+               "GMV差":      "NT${:+,.0f}",
+               "AOV":        "NT${:,.0f}",
+               "前期AOV":    "NT${:,.0f}",
+               "AOV差":      "NT${:+,.0f}",
+           }),
+        use_container_width=True, hide_index=True
+    )
+
+    st.subheader("管道明細（各產品線營收）")
     pivot = (ch_df.pivot_table(index="channel", columns="product_line",
                                values="營收", aggfunc="sum", fill_value=0)
                   .reset_index())
