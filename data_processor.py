@@ -202,9 +202,9 @@ def _cruise_brand(name: str) -> str:
     if "麗星" in n or "star cruises" in n or "探索星號" in n:
         return "麗星郵輪"
     if ("msc" in n or "地中海" in n) and "榮耀" in str(name):
-        return "MSC地中海"
+        return "MSC"
     if "msc" in n or "地中海郵輪" in str(name):
-        return "MSC地中海"
+        return "MSC"
     if "歌詩達" in n or "costa" in n:
         return "歌詩達"
     if "迪士尼" in n or "disney" in n:

@@ -486,7 +486,7 @@ elif page == "🚢 郵輪":
                 kpi(h3, "AOV", cur_aov, prev_aov)
 
                 # ── 品牌營收（依出發天數分色堆疊）────────────
-                BRAND_COLORS = {"麗星郵輪": "#1f77b4", "MSC地中海": "#ff7f0e", "歌詩達": "#2ca02c"}
+                BRAND_COLORS = {"麗星郵輪": "#1f77b4", "MSC": "#ff7f0e", "歌詩達": "#2ca02c"}
                 homeport_b = homeport_df.copy()
                 homeport_b["品牌"] = homeport_b["bnb_name"].apply(dp._cruise_brand)
                 homeport_b["船"]   = homeport_b["bnb_name"].apply(dp._homeport_ship)
