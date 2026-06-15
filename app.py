@@ -584,6 +584,25 @@ elif page == "🚢 郵輪":
                     column_config=_SHIP_TBL_COLCFG
                 )
 
+                # ── 依天數分（本期/前期/差異，可依船篩選）──────────
+                st.markdown("**依出發天數分**")
+                day_ships = sorted(days_wide["船"].dropna().unique().tolist())
+                sel_days_ship = st.multiselect("篩選船（號）", day_ships,
+                                               key="hp_days_ship",
+                                               placeholder="不選 = 顯示全部船")
+                dw = days_wide if not sel_days_ship else days_wide[days_wide["船"].isin(sel_days_ship)]
+                day_tbl = dw.groupby("天數")[["本期", "前期"]].sum().reset_index()
+                day_tbl["差異"] = day_tbl["本期"] - day_tbl["前期"]
+                day_tbl["_n"] = day_tbl["天數"].str.extract(r"(\d+)").astype(int)
+                day_tbl = (day_tbl.sort_values("_n")
+                                  .drop(columns="_n")
+                                  .reset_index(drop=True))
+                st.dataframe(
+                    day_tbl.style.map(color_diff, subset=["差異"])
+                                 .format({"差異": "{:+d}"}),
+                    use_container_width=True, hide_index=True
+                )
+
                 st.divider()
                 render_cruise_rank(homeport_df, hp, dp._homeport_ship, "hp_rank_ship")
 
