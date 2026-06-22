@@ -153,10 +153,16 @@ with st.sidebar:
                                min_value=min_date, max_value=max_date,
                                key="date_end", on_change=_on_date_change)
 
+    # 前期區間：週期型 preset 比「上一週同期」（往前 7 天），其餘往前推相同天數
     _n = (end_date - start_date).days + 1
-    _pe = start_date - timedelta(days=1)
-    _ps = _pe - timedelta(days=_n - 1)
-    st.caption(f"比較前期：{_ps.strftime('%m/%d')} ～ {_pe.strftime('%m/%d')}（共 {_n} 天）")
+    if preset in ("本週", "前一週"):
+        _prev_start = start_date - timedelta(days=7)
+        _prev_end   = end_date   - timedelta(days=7)
+    else:
+        _prev_end   = start_date - timedelta(days=1)
+        _prev_start = _prev_end  - timedelta(days=_n - 1)
+    st.caption(f"比較前期：{_prev_start.strftime('%m/%d')} ～ "
+               f"{_prev_end.strftime('%m/%d')}（共 {_n} 天）")
 
     all_statuses = sorted(df_all["booking_status"].dropna().unique().tolist())
     selected_statuses = st.multiselect("訂單狀態", options=all_statuses, default=all_statuses)
@@ -175,10 +181,7 @@ if df.empty:
     st.warning("目前篩選條件下無資料，請調整篩選範圍。")
     st.stop()
 
-# ── 前期資料（自動往前推相同天數）────────────────────────────
-_period_days = (end_date - start_date).days + 1
-_prev_end    = start_date - timedelta(days=1)
-_prev_start  = _prev_end  - timedelta(days=_period_days - 1)
+# ── 前期資料（_prev_start / _prev_end 已於側邊欄依 preset 計算）──────
 df_prev = dp.filter_df(
     df_all, _prev_start, _prev_end, None, selected_statuses,
     affiliate_ids=selected_affiliates if selected_affiliates else None
