@@ -1,7 +1,8 @@
 import pandas as pd
 
 
-def generate_insights(df: pd.DataFrame, df_prev: pd.DataFrame = None) -> str:
+def generate_insights(df: pd.DataFrame, df_prev: pd.DataFrame = None,
+                      start_date=None, end_date=None) -> str:
     sections = []
     df = df.copy()
     if df_prev is None:
@@ -9,6 +10,9 @@ def generate_insights(df: pd.DataFrame, df_prev: pd.DataFrame = None) -> str:
 
     # ── 整體趨勢（本期 vs 前期，與全站一致）──────────────────
     trend_lines = []
+    if start_date is not None and end_date is not None:
+        days = (end_date - start_date).days + 1
+        trend_lines.append(f"- 統計期間：{start_date} ～ {end_date}（共 {days} 天）")
     rev_now  = df["twd_amount"].sum()
     rev_prev = df_prev["twd_amount"].sum()
     if rev_prev > 0:

@@ -928,8 +928,9 @@ elif page == "💡 自動洞察":
 
     if st.button("產生洞察報告", type="primary"):
         with st.spinner("分析中..."):
-            insight = ai.generate_insights(df, df_prev)
+            insight = ai.generate_insights(df, df_prev, start_date, end_date)
             st.session_state["insight_text"] = insight
 
     if "insight_text" in st.session_state:
-        st.markdown(st.session_state["insight_text"])
+        # 跳脫 $，避免 NT$ 金額被當成 LaTeX 數學式
+        st.markdown(st.session_state["insight_text"].replace("$", "\\$"))
