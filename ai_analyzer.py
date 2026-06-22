@@ -1,34 +1,38 @@
 import pandas as pd
 
 
-def generate_insights(df: pd.DataFrame) -> str:
+def generate_insights(df: pd.DataFrame, df_prev: pd.DataFrame = None) -> str:
     sections = []
-
-    # ── 整體趨勢 ─────────────────────────────────────────
     df = df.copy()
-    df["order_week"] = df["order_date"].dt.to_period("W")
-    weeks = sorted(df["order_week"].dropna().unique())
+    if df_prev is None:
+        df_prev = pd.DataFrame(columns=df.columns)
 
+    # ── 整體趨勢（本期 vs 前期，與全站一致）──────────────────
     trend_lines = []
-    if len(weeks) >= 2:
-        latest_week = df[df["order_week"] == weeks[-1]]
-        prev_week   = df[df["order_week"] == weeks[-2]]
-        rev_now  = latest_week["twd_amount"].sum()
-        rev_prev = prev_week["twd_amount"].sum()
-        if rev_prev > 0:
-            chg = (rev_now - rev_prev) / rev_prev * 100
-            arrow = "↑" if chg > 0 else "↓"
-            trend_lines.append(f"- 本週營收 NT${rev_now:,.0f}，較上週 {arrow} {abs(chg):.1f}%")
+    rev_now  = df["twd_amount"].sum()
+    rev_prev = df_prev["twd_amount"].sum()
+    if rev_prev > 0:
+        chg = (rev_now - rev_prev) / rev_prev * 100
+        arrow = "↑" if chg > 0 else "↓"
+        trend_lines.append(
+            f"- 本期營收 NT${rev_now:,.0f}，較前期 {arrow} {abs(chg):.1f}%"
+            f"（前期 NT${rev_prev:,.0f}）")
+    else:
+        trend_lines.append(f"- 本期營收 NT${rev_now:,.0f}")
 
-        ord_now  = len(latest_week)
-        ord_prev = len(prev_week)
-        if ord_prev > 0:
-            chg2 = (ord_now - ord_prev) / ord_prev * 100
-            arrow2 = "↑" if chg2 > 0 else "↓"
-            trend_lines.append(f"- 本週訂單數 {ord_now:,} 筆，較上週 {arrow2} {abs(chg2):.1f}%")
+    ord_now  = len(df)
+    ord_prev = len(df_prev)
+    if ord_prev > 0:
+        chg2 = (ord_now - ord_prev) / ord_prev * 100
+        arrow2 = "↑" if chg2 > 0 else "↓"
+        trend_lines.append(
+            f"- 本期訂單數 {ord_now:,} 筆，較前期 {arrow2} {abs(chg2):.1f}%"
+            f"（前期 {ord_prev:,} 筆）")
+    else:
+        trend_lines.append(f"- 本期訂單數 {ord_now:,} 筆")
 
     if trend_lines:
-        sections.append("### 📈 本週概況\n" + "\n".join(trend_lines))
+        sections.append("### 📈 本期概況\n" + "\n".join(trend_lines))
 
     # ── 各產品線表現 ──────────────────────────────────────
     pl_df = (df.groupby("product_line")

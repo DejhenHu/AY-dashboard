@@ -928,7 +928,7 @@ elif page == "💡 自動洞察":
 
     if st.button("產生洞察報告", type="primary"):
         with st.spinner("分析中..."):
-            insight = ai.generate_insights(df)
+            insight = ai.generate_insights(df, df_prev)
             st.session_state["insight_text"] = insight
 
     if "insight_text" in st.session_state:
