@@ -449,6 +449,25 @@ if page == "📊 總覽":
         use_container_width=True, hide_index=True
     )
 
+    # ── 轉換前 10 名（依營收）──────────────────────────────
+    st.subheader("轉換前 10 名（依營收）")
+    top10 = (df.groupby(["bnb_name", "product_line"])
+               .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
+               .reset_index())
+    top10["平均客單價"] = (top10["營收"] / top10["訂單數"]).fillna(0)
+    top10 = (top10.sort_values("營收", ascending=False)
+                  .head(10)
+                  .reset_index(drop=True)
+                  .rename(columns={"bnb_name": "商品名稱", "product_line": "產品線"}))
+    top10.index += 1
+    st.dataframe(
+        top10[["商品名稱", "產品線", "訂單數", "營收", "平均客單價"]].style.format({
+            "營收":     "NT${:,.0f}",
+            "平均客單價": "NT${:,.0f}",
+        }),
+        use_container_width=True
+    )
+
 # ════════════════════════════════════════════════════════
 # 郵輪
 # ════════════════════════════════════════════════════════
