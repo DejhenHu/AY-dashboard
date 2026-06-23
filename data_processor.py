@@ -173,12 +173,20 @@ def revenue_by_product_line(df: pd.DataFrame) -> pd.DataFrame:
               .reset_index())
 
 
+# 月頻代碼相容：新版 pandas 月底頻率為 "ME"，舊版 "M"；resample 統一用 "ME"
+_RESAMPLE_FREQ = {"M": "ME"}
+
+
+def _resample_freq(freq: str) -> str:
+    return _RESAMPLE_FREQ.get(freq, freq)
+
+
 def gmv_ohlc(df: pd.DataFrame, freq: str = "W") -> pd.DataFrame:
     """把每日 GMV 依週期(freq)彙整成 K 線用的開高低收：
     開=期間首日GMV、收=末日GMV、高/低=期間內單日GMV最大/最小。"""
     daily = df.groupby(df["order_date"].dt.normalize())["twd_amount"].sum()
     daily.index = pd.DatetimeIndex(daily.index)
-    g = daily.resample(freq)
+    g = daily.resample(_resample_freq(freq))
     out = pd.DataFrame({
         "open":  g.first(),
         "high":  g.max(),
@@ -190,7 +198,7 @@ def gmv_ohlc(df: pd.DataFrame, freq: str = "W") -> pd.DataFrame:
 
 def revenue_trend(df: pd.DataFrame, freq: str = "W") -> pd.DataFrame:
     return (df.set_index("order_date")
-              .resample(freq)["twd_amount"]
+              .resample(_resample_freq(freq))["twd_amount"]
               .sum()
               .reset_index()
               .rename(columns={"order_date": "日期", "twd_amount": "營收"}))
