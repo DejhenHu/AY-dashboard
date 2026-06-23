@@ -49,7 +49,8 @@ with st.sidebar:
     _PAGES = [
         "📊 總覽", "🚢 郵輪", "🌍 GIT",
         "🏠 住宿 & 露營", "🏃 SEB", "🚄 高鐵",
-        "📱 eSIM", "🗺️ Day Tour", "📣 行銷管道", "💡 自動洞察"
+        "📱 eSIM", "🗺️ Day Tour", "📣 行銷管道",
+        "🔍 訂單查詢", "💡 自動洞察"
     ]
     _cur = st.query_params.get("page", _PAGES[0])
     if _cur not in _PAGES:
@@ -980,6 +981,63 @@ elif page == "📣 行銷管道":
                                values="營收", aggfunc="sum", fill_value=0)
                   .reset_index())
     st.dataframe(pivot, use_container_width=True)
+
+# ════════════════════════════════════════════════════════
+# 訂單查詢
+# ════════════════════════════════════════════════════════
+elif page == "🔍 訂單查詢":
+    st.caption("查詢結果會套用側邊欄的日期、訂單狀態、行銷管道篩選。")
+
+    q1, q2 = st.columns([2, 1])
+    with q1:
+        kw = st.text_input("關鍵字（訂單編號 / 商品名稱 / 城市）",
+                           placeholder="輸入關鍵字，可留空只用下方篩選")
+    with q2:
+        pl_opts = sorted(df["product_line"].dropna().unique().tolist())
+        sel_pl = st.multiselect("產品線", pl_opts, placeholder="不選 = 全部")
+
+    res = df.copy()
+    if sel_pl:
+        res = res[res["product_line"].isin(sel_pl)]
+    if kw and kw.strip():
+        k = kw.strip().lower()
+        mask = (
+            res["order_id"].astype(str).str.lower().str.contains(k, na=False)
+            | res["bnb_name"].astype(str).str.lower().str.contains(k, na=False)
+            | res["bnb_city"].astype(str).str.lower().str.contains(k, na=False)
+        )
+        res = res[mask]
+
+    st.markdown(f"**符合 {len(res):,} 筆**，營收合計 NT${res['twd_amount'].sum():,.0f}")
+
+    _cols = ["order_id", "order_date", "product_line", "bnb_name", "bnb_city",
+             "booking_status", "affiliate_id", "check_in", "check_out",
+             "nights", "twd_amount"]
+    _rename = {
+        "order_id": "訂單編號", "order_date": "下單日期", "product_line": "產品線",
+        "bnb_name": "商品名稱", "bnb_city": "城市", "booking_status": "狀態",
+        "affiliate_id": "行銷管道", "check_in": "入住/出發", "check_out": "退房/結束",
+        "nights": "晚數", "twd_amount": "金額",
+    }
+    show = (res[_cols]
+            .sort_values("order_date", ascending=False)
+            .rename(columns=_rename))
+
+    if show.empty:
+        st.info("查無符合條件的訂單，請調整關鍵字或篩選。")
+    else:
+        st.dataframe(
+            show.style.format({
+                "下單日期": lambda d: d.strftime("%Y-%m-%d") if pd.notna(d) else "",
+                "入住/出發": lambda d: d.strftime("%Y-%m-%d") if pd.notna(d) else "",
+                "退房/結束": lambda d: d.strftime("%Y-%m-%d") if pd.notna(d) else "",
+                "金額": "NT${:,.0f}",
+            }),
+            use_container_width=True, hide_index=True
+        )
+        csv = show.to_csv(index=False).encode("utf-8-sig")
+        st.download_button("⬇️ 下載 CSV", csv,
+                           file_name="訂單查詢結果.csv", mime="text/csv")
 
 # ════════════════════════════════════════════════════════
 # 自動洞察
