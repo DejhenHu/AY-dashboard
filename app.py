@@ -425,9 +425,16 @@ if page == "📊 總覽":
 
     # ── GMV K 線圖 ───────────────────────────────────────────
     st.subheader("📈 GMV K 線圖")
-    k_freq = st.radio("K 線週期", ["W", "M"],
-                      format_func=lambda x: {"W": "週", "M": "月"}[x],
-                      horizontal=True, key="kline_freq")
+    kc1, kc2 = st.columns([1, 2])
+    with kc1:
+        k_freq = st.radio("K 線週期", ["D", "W", "M"],
+                          format_func=lambda x: {"D": "日", "W": "週", "M": "月"}[x],
+                          index=1, horizontal=True, key="kline_freq")
+    with kc2:
+        ma_periods = st.multiselect("均線 MA（單位＝K線週期）",
+                                    [5, 10, 20, 60], default=[5, 10, 20],
+                                    key="kline_ma")
+    _unit = {"D": "日", "W": "週", "M": "月"}[k_freq]
     ohlc = dp.gmv_ohlc(df, freq=k_freq)
     if len(ohlc) < 2:
         st.info("此區間資料不足，至少需涵蓋 2 個週期才能畫 K 線圖。")
@@ -437,17 +444,27 @@ if page == "📊 總覽":
             open=ohlc["open"], high=ohlc["high"],
             low=ohlc["low"], close=ohlc["close"],
             increasing_line_color="#d62728", decreasing_line_color="#2ca02c",
-            name="日GMV",
+            name="GMV",
         ))
+        # 均線：對收盤(期間末日 GMV)做 N 期移動平均
+        _ma_colors = ["#ff9900", "#1f77b4", "#9467bd", "#17becf"]
+        for i, p in enumerate(sorted(ma_periods)):
+            if len(ohlc) >= p:
+                fig_k.add_trace(go.Scatter(
+                    x=ohlc["日期"], y=ohlc["close"].rolling(p).mean(),
+                    mode="lines", name=f"MA{p}",
+                    line=dict(width=1.5, color=_ma_colors[i % len(_ma_colors)]),
+                ))
         fig_k.update_layout(
-            title="GMV K 線（每根=一個週期，開高低收=該期間每日 GMV）",
+            title=f"GMV K 線（每根＝一{_unit}，開高低收＝該期間每日 GMV）",
             yaxis_title="單日 GMV (NT$)",
             xaxis_rangeslider_visible=False,
             height=420,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
         st.plotly_chart(fig_k, use_container_width=True)
-        st.caption("開盤=期間首日 GMV、收盤=末日 GMV、最高/最低=期間內單日 GMV 最大/最小。"
-                   "紅漲綠跌（台股慣例）。")
+        st.caption(f"開盤=期間首日 GMV、收盤=末日 GMV、最高/最低=期間內單日 GMV 最大/最小。"
+                   f"均線為收盤的移動平均（MA5＝近 5 {_unit}）。紅漲綠跌（台股慣例）。")
 
     st.subheader("各產品線明細")
     prev_pl = (df_prev.groupby("product_line")
