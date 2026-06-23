@@ -437,16 +437,28 @@ if page == "📊 總覽":
     _unit = {"D": "日", "W": "週", "M": "月"}[k_freq]
     ohlc = dp.gmv_ohlc(df, freq=k_freq)
     if len(ohlc) < 2:
-        st.info("此區間資料不足，至少需涵蓋 2 個週期才能畫 K 線圖。")
+        st.info("此區間資料不足，至少需涵蓋 2 個週期才能畫圖。")
     else:
-        fig_k = go.Figure(go.Candlestick(
-            x=ohlc["日期"],
-            open=ohlc["open"], high=ohlc["high"],
-            low=ohlc["low"], close=ohlc["close"],
-            increasing_line_color="#d62728", decreasing_line_color="#2ca02c",
-            name="GMV",
-        ))
-        # 均線：對收盤(期間末日 GMV)做 N 期移動平均
+        if k_freq == "D":
+            # 日線：每天只有一個 GMV，蠟燭會退化成橫線，改用折線呈現
+            fig_k = go.Figure(go.Scatter(
+                x=ohlc["日期"], y=ohlc["close"],
+                mode="lines+markers", name="日 GMV",
+                line=dict(color="#888", width=1.5),
+                marker=dict(size=4),
+            ))
+            _title = f"GMV 日線 ＋ 均線（每點＝當日 GMV）"
+        else:
+            fig_k = go.Figure(go.Candlestick(
+                x=ohlc["日期"],
+                open=ohlc["open"], high=ohlc["high"],
+                low=ohlc["low"], close=ohlc["close"],
+                increasing_line_color="#d62728", decreasing_line_color="#2ca02c",
+                name="GMV",
+            ))
+            _title = f"GMV K 線（每根＝一{_unit}，開高低收＝該期間每日 GMV）"
+
+        # 均線：對收盤（日線即當日 GMV）做 N 期移動平均
         _ma_colors = ["#ff9900", "#1f77b4", "#9467bd", "#17becf"]
         for i, p in enumerate(sorted(ma_periods)):
             if len(ohlc) >= p:
@@ -456,15 +468,19 @@ if page == "📊 總覽":
                     line=dict(width=1.5, color=_ma_colors[i % len(_ma_colors)]),
                 ))
         fig_k.update_layout(
-            title=f"GMV K 線（每根＝一{_unit}，開高低收＝該期間每日 GMV）",
-            yaxis_title="單日 GMV (NT$)",
+            title=_title,
+            yaxis_title="GMV (NT$)",
             xaxis_rangeslider_visible=False,
             height=420,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
         st.plotly_chart(fig_k, use_container_width=True)
-        st.caption(f"開盤=期間首日 GMV、收盤=末日 GMV、最高/最低=期間內單日 GMV 最大/最小。"
-                   f"均線為收盤的移動平均（MA5＝近 5 {_unit}）。紅漲綠跌（台股慣例）。")
+        if k_freq == "D":
+            st.caption(f"日線每點為當日 GMV；均線為其移動平均（MA5＝近 5 日）。"
+                       f"※ MA 需要前 N 日資料，若日期區間太短均線會較短，可拉長左側日期範圍。")
+        else:
+            st.caption(f"開盤=期間首日 GMV、收盤=末日 GMV、最高/最低=期間內單日 GMV 最大/最小。"
+                       f"均線為收盤的移動平均（MA5＝近 5 {_unit}）。紅漲綠跌（台股慣例）。")
 
     st.subheader("各產品線明細")
     prev_pl = (df_prev.groupby("product_line")
