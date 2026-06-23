@@ -423,6 +423,32 @@ if page == "📊 總覽":
     fig3 = px.line(trend, x="日期", y="營收", title="營收趨勢", markers=True)
     st.plotly_chart(fig3, use_container_width=True)
 
+    # ── GMV K 線圖 ───────────────────────────────────────────
+    st.subheader("📈 GMV K 線圖")
+    k_freq = st.radio("K 線週期", ["W", "M"],
+                      format_func=lambda x: {"W": "週", "M": "月"}[x],
+                      horizontal=True, key="kline_freq")
+    ohlc = dp.gmv_ohlc(df, freq=k_freq)
+    if len(ohlc) < 2:
+        st.info("此區間資料不足，至少需涵蓋 2 個週期才能畫 K 線圖。")
+    else:
+        fig_k = go.Figure(go.Candlestick(
+            x=ohlc["日期"],
+            open=ohlc["open"], high=ohlc["high"],
+            low=ohlc["low"], close=ohlc["close"],
+            increasing_line_color="#d62728", decreasing_line_color="#2ca02c",
+            name="日GMV",
+        ))
+        fig_k.update_layout(
+            title="GMV K 線（每根=一個週期，開高低收=該期間每日 GMV）",
+            yaxis_title="單日 GMV (NT$)",
+            xaxis_rangeslider_visible=False,
+            height=420,
+        )
+        st.plotly_chart(fig_k, use_container_width=True)
+        st.caption("開盤=期間首日 GMV、收盤=末日 GMV、最高/最低=期間內單日 GMV 最大/最小。"
+                   "紅漲綠跌（台股慣例）。")
+
     st.subheader("各產品線明細")
     prev_pl = (df_prev.groupby("product_line")
                       .agg(前期訂單數=("order_id", "count"), 前期營收=("twd_amount", "sum"))

@@ -173,6 +173,21 @@ def revenue_by_product_line(df: pd.DataFrame) -> pd.DataFrame:
               .reset_index())
 
 
+def gmv_ohlc(df: pd.DataFrame, freq: str = "W") -> pd.DataFrame:
+    """把每日 GMV 依週期(freq)彙整成 K 線用的開高低收：
+    開=期間首日GMV、收=末日GMV、高/低=期間內單日GMV最大/最小。"""
+    daily = df.groupby(df["order_date"].dt.normalize())["twd_amount"].sum()
+    daily.index = pd.DatetimeIndex(daily.index)
+    g = daily.resample(freq)
+    out = pd.DataFrame({
+        "open":  g.first(),
+        "high":  g.max(),
+        "low":   g.min(),
+        "close": g.last(),
+    }).dropna().reset_index()
+    return out.rename(columns={out.columns[0]: "日期"})
+
+
 def revenue_trend(df: pd.DataFrame, freq: str = "W") -> pd.DataFrame:
     return (df.set_index("order_date")
               .resample(freq)["twd_amount"]
