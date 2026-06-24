@@ -287,6 +287,7 @@ def render_simple_tab(sub_df: pd.DataFrame, label: str,
             fig_c = px.bar(ci, x="check_in_month", y="訂單數",
                            title=f"{label} 出發月份分佈",
                            labels={"check_in_month": "出發月份"})
+            fig_c.update_xaxes(type="category", categoryorder="category ascending")
             st.plotly_chart(fig_c, use_container_width=True)
         else:
             # eSIM 等沒有出發日期的，改顯示裝置平台
@@ -594,6 +595,7 @@ elif page == "🚢 郵輪":
                               barmode="stack", title="出發月份 × 船",
                               labels={"check_in_month": "出發月份"},
                               color_discrete_map=BRAND_COLORS)
+                fig3.update_xaxes(type="category", categoryorder="category ascending")
                 st.plotly_chart(fig3, use_container_width=True)
 
                 # ── 各船統整 ──────────────────────────────
@@ -729,6 +731,7 @@ elif page == "🚢 郵輪":
                 fig3 = px.bar(ci_fly, x="check_in_month", y="訂單數", color="品牌",
                               barmode="stack", title="出發月份 × 船",
                               labels={"check_in_month": "出發月份"})
+                fig3.update_xaxes(type="category", categoryorder="category ascending")
                 st.plotly_chart(fig3, use_container_width=True)
 
                 # ── 各船統整 ──────────────────────────────
@@ -831,6 +834,7 @@ elif page == "🌍 GIT":
             fig2 = px.bar(ci_df, x="check_in_month", y="訂單數",
                           title="GIT 出發月份分佈",
                           labels={"check_in_month": "出發月份"})
+            fig2.update_xaxes(type="category", categoryorder="category ascending")
             st.plotly_chart(fig2, use_container_width=True)
 
         st.divider()
@@ -875,6 +879,7 @@ elif page == "🏠 住宿 & 露營":
                 fig2 = px.bar(ci_df, x="check_in_month", y="訂單數",
                               title=f"{label} 入住月份分佈",
                               labels={"check_in_month": "入住月份"})
+                fig2.update_xaxes(type="category", categoryorder="category ascending")
                 st.plotly_chart(fig2, use_container_width=True)
 
             if pl == "TW":
