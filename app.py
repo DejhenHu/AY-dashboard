@@ -421,7 +421,10 @@ if page == "📊 總覽":
         st.plotly_chart(fig2, use_container_width=True)
 
     trend = dp.revenue_trend(df, freq=trend_freq)
+    _xfmt = "%Y-%m" if trend_freq == "M" else "%Y-%m-%d"
+    trend["日期"] = trend["日期"].dt.strftime(_xfmt)
     fig3 = px.line(trend, x="日期", y="營收", title="營收趨勢", markers=True)
+    fig3.update_xaxes(type="category")  # 純日期、不顯示時間刻度
     st.plotly_chart(fig3, use_container_width=True)
 
     # ── GMV K 線圖 ───────────────────────────────────────────
@@ -440,10 +443,12 @@ if page == "📊 總覽":
     if len(ohlc) < 2:
         st.info("此區間資料不足，至少需涵蓋 2 個週期才能畫圖。")
     else:
+        # x 軸用純日期字串（避免出現 00:00、06:00 等時間刻度）
+        _xk = ohlc["日期"].dt.strftime("%Y-%m" if k_freq == "M" else "%Y-%m-%d")
         if k_freq == "D":
             # 日線：每天只有一個 GMV，蠟燭會退化成橫線，改用折線呈現
             fig_k = go.Figure(go.Scatter(
-                x=ohlc["日期"], y=ohlc["close"],
+                x=_xk, y=ohlc["close"],
                 mode="lines+markers", name="日 GMV",
                 line=dict(color="#888", width=1.5),
                 marker=dict(size=4),
@@ -451,7 +456,7 @@ if page == "📊 總覽":
             _title = f"GMV 日線 ＋ 均線（每點＝當日 GMV）"
         else:
             fig_k = go.Figure(go.Candlestick(
-                x=ohlc["日期"],
+                x=_xk,
                 open=ohlc["open"], high=ohlc["high"],
                 low=ohlc["low"], close=ohlc["close"],
                 increasing_line_color="#d62728", decreasing_line_color="#2ca02c",
@@ -464,7 +469,7 @@ if page == "📊 總覽":
         for i, p in enumerate(sorted(ma_periods)):
             if len(ohlc) >= p:
                 fig_k.add_trace(go.Scatter(
-                    x=ohlc["日期"], y=ohlc["close"].rolling(p).mean(),
+                    x=_xk, y=ohlc["close"].rolling(p).mean(),
                     mode="lines", name=f"MA{p}",
                     line=dict(width=1.5, color=_ma_colors[i % len(_ma_colors)]),
                 ))
@@ -475,6 +480,7 @@ if page == "📊 總覽":
             height=420,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
+        fig_k.update_xaxes(type="category")  # 純日期、不顯示時間刻度
         st.plotly_chart(fig_k, use_container_width=True)
         if k_freq == "D":
             st.caption(f"日線每點為當日 GMV；均線為其移動平均（MA5＝近 5 日）。"
