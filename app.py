@@ -298,15 +298,23 @@ def render_simple_tab(sub_df: pd.DataFrame, label: str,
 
 
 def render_rank_tables(sub: pd.DataFrame, sub_prev: pd.DataFrame,
-                       with_city: bool = True):
-    """商品「訂單數排行」與「成長數排行」前10名表格（與住宿頁一致）。"""
+                       with_city: bool = True, region_fn=None):
+    """商品「訂單數排行」與「成長數排行」前10名表格（與住宿頁一致）。
+    region_fn 提供時，依商品名萃取「地區」並多顯示一欄。"""
     if sub.empty:
         return
     if sub_prev is None:
         sub_prev = pd.DataFrame(columns=sub.columns)
+    sub = sub.copy()
+    if region_fn is not None:
+        sub["_region"] = sub["bnb_name"].apply(region_fn)
 
-    group_cols = ["bnb_id", "bnb_name"] + (["bnb_city"] if with_city else [])
-    rename = {"bnb_id": "BNB ID", "bnb_name": "商品名稱", "bnb_city": "所在城市"}
+    group_cols = (["bnb_id", "bnb_name"]
+                  + (["_region"] if region_fn is not None else [])
+                  + (["bnb_city"] if with_city else []))
+    rename = {"bnb_id": "BNB ID", "bnb_name": "商品名稱",
+              "bnb_city": "所在城市", "_region": "地區"}
+    region_cols = ["地區"] if region_fn is not None else []
     city_cols = ["所在城市"] if with_city else []
 
     rank_cur = (sub.groupby(group_cols)
@@ -322,7 +330,7 @@ def render_rank_tables(sub: pd.DataFrame, sub_prev: pd.DataFrame,
     rank_full["GMV"] = rank_full["GMV"].apply(lambda v: f"NT${v:,.0f}")
 
     st.subheader("① 訂單數排行（前10）")
-    tbl1 = (rank_full[["BNB ID", "商品名稱", *city_cols, "訂單數", "GMV"]]
+    tbl1 = (rank_full[["BNB ID", "商品名稱", *region_cols, *city_cols, "訂單數", "GMV"]]
             .sort_values("訂單數", ascending=False)
             .head(10)
             .reset_index(drop=True))
@@ -330,7 +338,8 @@ def render_rank_tables(sub: pd.DataFrame, sub_prev: pd.DataFrame,
     st.dataframe(tbl1, use_container_width=True)
 
     st.subheader("② 成長數排行（前10）")
-    tbl2 = (rank_full[["BNB ID", "商品名稱", *city_cols, "訂單數", "前期訂單數", "成長數", "GMV"]]
+    tbl2 = (rank_full[["BNB ID", "商品名稱", *region_cols, *city_cols,
+                       "訂單數", "前期訂單數", "成長數", "GMV"]]
             .sort_values("成長數", ascending=False)
             .head(10)
             .reset_index(drop=True))
@@ -825,7 +834,14 @@ elif page == "🌍 GIT":
             st.plotly_chart(fig2, use_container_width=True)
 
         st.divider()
-        render_rank_tables(git_df, git_prev, with_city=False)
+        _git_regions = sorted(git_df["bnb_name"].apply(dp._git_region).unique().tolist())
+        sel_region = st.multiselect("地區篩選", _git_regions,
+                                    placeholder="不選 = 全部地區", key="git_rank_region")
+        git_r, git_pr = git_df, git_prev
+        if sel_region:
+            git_r  = git_df[git_df["bnb_name"].apply(dp._git_region).isin(sel_region)]
+            git_pr = git_prev[git_prev["bnb_name"].apply(dp._git_region).isin(sel_region)]
+        render_rank_tables(git_r, git_pr, with_city=False, region_fn=dp._git_region)
 
 # ════════════════════════════════════════════════════════
 # 住宿 & 露營
