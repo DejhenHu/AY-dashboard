@@ -173,8 +173,10 @@ def revenue_by_product_line(df: pd.DataFrame) -> pd.DataFrame:
               .reset_index())
 
 
-# 月頻代碼相容：新版 pandas 月底頻率為 "ME"，舊版 "M"；resample 統一用 "ME"
-_RESAMPLE_FREQ = {"M": "ME"}
+# resample 頻率對應：
+#  M → ME（新版 pandas 月底頻率代碼）
+#  W → W-SAT（以週六為週尾，使一週為週日～週六，與儀表板「本週」定義一致）
+_RESAMPLE_FREQ = {"M": "ME", "W": "W-SAT"}
 
 
 def _resample_freq(freq: str) -> str:
