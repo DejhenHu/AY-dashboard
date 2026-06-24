@@ -275,14 +275,15 @@ def render_simple_tab(sub_df: pd.DataFrame, label: str,
     col1, col2 = st.columns(2)
 
     with col1:
-        # 若有 type_col（如高鐵的 bnb_type），先用它分群
+        # 若有 type_col（如高鐵的 bnb_type）且類型超過 1 種，才畫類型佔比圓餅
         if type_col and type_col in sub_df.columns:
             type_rev = (sub_df.groupby(type_col)
                               .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
                               .reset_index())
-            fig_t = px.pie(type_rev, names=type_col, values="營收",
-                           title=f"{label} 類型佔比", hole=0.4)
-            st.plotly_chart(fig_t, use_container_width=True)
+            if len(type_rev) > 1:
+                fig_t = px.pie(type_rev, names=type_col, values="營收",
+                               title=f"{label} 類型佔比", hole=0.4)
+                st.plotly_chart(fig_t, use_container_width=True)
 
         prod_df = (sub_df.groupby("bnb_name")
                          .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
