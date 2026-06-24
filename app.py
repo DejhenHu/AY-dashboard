@@ -904,26 +904,37 @@ elif page == "🏃 SEB":
 # 高鐵
 # ════════════════════════════════════════════════════════
 elif page == "🚄 高鐵":
-    render_simple_tab(df[df["product_line"] == "高鐵"], "高鐵", type_col="bnb_type",
-                      prev_df=df_prev[df_prev["product_line"] == "高鐵"])
+    thsr_df   = df[df["product_line"] == "高鐵"]
+    thsr_prev = df_prev[df_prev["product_line"] == "高鐵"]
+    render_simple_tab(thsr_df, "高鐵", type_col="bnb_type", prev_df=thsr_prev)
+    if not thsr_df.empty:
+        st.divider()
+        render_rank_tables(thsr_df, thsr_prev, with_city=False)
 
 # ════════════════════════════════════════════════════════
 # eSIM
 # ════════════════════════════════════════════════════════
 elif page == "📱 eSIM":
-    render_simple_tab(df[df["product_line"] == "eSIM"], "eSIM", has_checkin=False,
-                      prev_df=df_prev[df_prev["product_line"] == "eSIM"])
+    esim_df   = df[df["product_line"] == "eSIM"]
+    esim_prev = df_prev[df_prev["product_line"] == "eSIM"]
+    render_simple_tab(esim_df, "eSIM", has_checkin=False, prev_df=esim_prev)
+    if not esim_df.empty:
+        st.divider()
+        render_rank_tables(esim_df, esim_prev, with_city=False)
 
 # ════════════════════════════════════════════════════════
 # Day Tour
 # ════════════════════════════════════════════════════════
 elif page == "🗺️ Day Tour":
-    daytour_df = df[df["product_line"] == "Day Tour"]
+    daytour_df   = df[df["product_line"] == "Day Tour"]
+    daytour_prev = df_prev[df_prev["product_line"] == "Day Tour"]
     if daytour_df.empty:
         st.info("此篩選範圍內無 Day Tour 訂單。")
     else:
         render_simple_tab(daytour_df, "Day Tour", type_col="bnb_type",
-                          prev_df=df_prev[df_prev["product_line"] == "Day Tour"])
+                          prev_df=daytour_prev)
+        st.divider()
+        render_rank_tables(daytour_df, daytour_prev, with_city=False)
 
 # ════════════════════════════════════════════════════════
 # 行銷管道
