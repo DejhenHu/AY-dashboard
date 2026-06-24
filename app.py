@@ -807,8 +807,14 @@ elif page == "🌍 GIT":
 
         col1, col2 = st.columns(2)
         with col1:
-            region_df = dp.git_region_distribution(df)
-            fig = hbar(region_df, x="營收", y="bnb_name", title="GIT 商品排行（前20）")
+            region_df = dp.git_country_distribution(df)
+            region_df["佔比"] = (region_df["營收"] / region_df["營收"].sum() * 100).round(1).astype(str) + "%"
+            fig = px.treemap(region_df, path=["地區"], values="營收",
+                             title="GIT 地區分布（依營收）",
+                             custom_data=["佔比", "訂單數"])
+            fig.update_traces(
+                texttemplate="<b>%{label}</b><br>%{customdata[0]}<br>NT$%{value:,.0f}<br>%{customdata[1]} 單",
+                textfont_size=14)
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:

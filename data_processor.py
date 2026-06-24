@@ -302,6 +302,22 @@ def git_region_distribution(df: pd.DataFrame) -> pd.DataFrame:
                .head(20))
 
 
+_GIT_COUNTRY = {
+    "Taiwan": "台灣", "Japan": "日本", "Korea": "韓國",
+    "Thailand": "泰國", "Singapore": "新加坡",
+}
+
+
+def git_country_distribution(df: pd.DataFrame) -> pd.DataFrame:
+    """GIT 依國家/地區（column_switch_3）的營收與訂單數；非國家值歸『其他』。"""
+    git = df[df["product_line"] == "GIT"].copy()
+    git["地區"] = git["column_switch_3"].map(_GIT_COUNTRY).fillna("其他")
+    return (git.groupby("地區")
+               .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
+               .sort_values("營收", ascending=False)
+               .reset_index())
+
+
 def accommodation_region_distribution(df: pd.DataFrame, product_line: str) -> pd.DataFrame:
     sub = df[df["product_line"] == product_line].copy()
     return (sub.groupby("bnb_city")
