@@ -18,10 +18,15 @@ st.set_page_config(
 
 
 @st.cache_data
-def load_tw_geojson():
-    path = os.path.join(os.path.dirname(__file__), "taiwan_counties.geojson")
+def _read_geojson(path, _mtime):
+    # _mtime 納入快取鍵：檔案內容更新時自動失效重載
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_tw_geojson():
+    path = os.path.join(os.path.dirname(__file__), "taiwan_counties.geojson")
+    return _read_geojson(path, os.path.getmtime(path))
 
 
 st.title("🌏 AsiaYo 業績儀表板")
