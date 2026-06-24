@@ -367,6 +367,29 @@ def accommodation_region_distribution(df: pd.DataFrame, product_line: str) -> pd
                .head(20))
 
 
+# 台灣住宿城市（英文）→ 地圖縣市名（對應 taiwan_counties.geojson 的 COUNTYNAME）
+_TW_CITY_ZH = {
+    "Taipei City": "台北市", "New Taipei City": "新北市", "Taoyuan City": "桃園縣",
+    "Taichung City": "台中市", "Tainan City": "台南市", "Kaohsiung City": "高雄市",
+    "Keelung City": "基隆市", "Hsinchu City": "新竹市", "Hsinchu County": "新竹縣",
+    "Miaoli County": "苗栗縣", "Changhua County": "彰化縣", "Nantou County": "南投縣",
+    "Yunlin County": "雲林縣", "Chiayi City": "嘉義市", "Chiayi County": "嘉義縣",
+    "Pingtung County": "屏東縣", "Yilan County": "宜蘭縣", "Hualien County": "花蓮縣",
+    "Taitung County": "台東縣", "Penghu County": "澎湖縣", "Kinmen County": "金門縣",
+    "Matsu": "連江縣",
+}
+
+
+def tw_city_geo(df: pd.DataFrame) -> pd.DataFrame:
+    """台灣住宿各縣市的訂單數、營收（縣市名轉為地圖用中文）。"""
+    tw = df[df["product_line"] == "TW"].copy()
+    tw["縣市"] = tw["bnb_city"].map(_TW_CITY_ZH)
+    tw = tw.dropna(subset=["縣市"])
+    return (tw.groupby("縣市")
+              .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
+              .reset_index())
+
+
 def checkin_monthly(df: pd.DataFrame, product_line: str) -> pd.DataFrame:
     sub = df[df["product_line"] == product_line].copy()
     sub["check_in_month"] = sub["check_in"].dt.to_period("M").astype(str)

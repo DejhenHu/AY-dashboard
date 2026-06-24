@@ -1,3 +1,6 @@
+import json
+import os
+
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
@@ -12,6 +15,13 @@ st.set_page_config(
     page_icon="🌏",
     layout="wide"
 )
+
+
+@st.cache_data
+def load_tw_geojson():
+    path = os.path.join(os.path.dirname(__file__), "taiwan_counties.geojson")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 st.title("🌏 AsiaYo 業績儀表板")
@@ -871,8 +881,22 @@ elif page == "🏠 住宿 & 露營":
 
             col1, col2 = st.columns(2)
             with col1:
-                city_df = dp.accommodation_region_distribution(df, pl)
-                fig = hbar(city_df, x="營收", y="bnb_city", title=f"{label} 城市排行（前20）")
+                if pl == "TW":
+                    # 台灣：用縣市地圖呈現（顏色越深營收越高）
+                    geo_df = dp.tw_city_geo(df)
+                    fig = px.choropleth(
+                        geo_df, geojson=load_tw_geojson(), locations="縣市",
+                        featureidkey="properties.COUNTYNAME",
+                        color="營收", color_continuous_scale="Blues",
+                        hover_data={"訂單數": True, "營收": ":,.0f"},
+                        title="台灣住宿 各縣市營收分布",
+                    )
+                    fig.update_geos(fitbounds="locations", visible=False)
+                    fig.update_layout(height=460, margin=dict(l=0, r=0, t=40, b=0))
+                else:
+                    city_df = dp.accommodation_region_distribution(df, pl)
+                    fig = hbar(city_df, x="營收", y="bnb_city",
+                               title=f"{label} 城市排行（前20）")
                 st.plotly_chart(fig, use_container_width=True)
             with col2:
                 ci_df = dp.checkin_monthly(df, pl)
