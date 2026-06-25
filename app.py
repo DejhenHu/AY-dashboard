@@ -823,32 +823,48 @@ elif page == "🚢 郵輪":
 
         # ── 行銷視角（Google Ads / SEO / CRM）──────────────
         with ctab_mkt:
-            st.caption("給 Google Ads／SEO／CRM 的郵輪行銷分析（涵蓋全部郵輪、套用側邊欄篩選）。")
 
-            # 🔍 航線目的地熱度（依台灣出發／國外出發分類）
+            def _mkt_color_diff(v):
+                if v > 0:   return "color: green; font-weight: bold"
+                elif v < 0: return "color: red; font-weight: bold"
+                return ""
+
+            def _dest_cmp(cur_sub, prev_sub, topn=15):
+                cur = (dp.cruise_destination_heat(cur_sub, top=999)[["目的地", "訂單數"]]
+                       .rename(columns={"訂單數": "本期"}))
+                prev = (dp.cruise_destination_heat(prev_sub, top=999)[["目的地", "訂單數"]]
+                        .rename(columns={"訂單數": "前期"}))
+                m = cur.merge(prev, on="目的地", how="outer").fillna(0)
+                m["本期"] = m["本期"].astype(int)
+                m["前期"] = m["前期"].astype(int)
+                m["差異"] = m["本期"] - m["前期"]
+                return (m.sort_values("本期", ascending=False)
+                         .head(topn).reset_index(drop=True))
+
+            def _show_dest(cur_sub, prev_sub, empty_msg):
+                d = _dest_cmp(cur_sub, prev_sub)
+                if d.empty or d["本期"].sum() == 0:
+                    st.info(empty_msg)
+                else:
+                    st.dataframe(
+                        d.style.map(_mkt_color_diff, subset=["差異"])
+                               .format({"差異": "{:+d}"}),
+                        use_container_width=True, hide_index=True)
+
+            # 🔍 航線目的地熱度（本期 vs 前期，依台灣/國外出發分類）
             st.subheader("🔍 航線目的地熱度")
             dcol1, dcol2 = st.columns(2)
             with dcol1:
                 st.markdown("**🛳️ 台灣出發（母港）**")
-                hp_dest = dp.cruise_destination_heat(
-                    cruise_df[cruise_df["cruise_type"] == "母港出發"], top=15)
-                if hp_dest.empty:
-                    st.info("此範圍內無母港出發目的地。")
-                else:
-                    st.plotly_chart(hbar(hp_dest, x="訂單數", y="目的地",
-                                         title="台灣出發 目的地"),
-                                    use_container_width=True)
+                _show_dest(cruise_df[cruise_df["cruise_type"] == "母港出發"],
+                           cruise_prev[cruise_prev["cruise_type"] == "母港出發"],
+                           "此範圍內無母港出發目的地。")
             with dcol2:
                 st.markdown("**✈️ 國外出發（飛航）**")
-                fly_dest = dp.cruise_destination_heat(
-                    cruise_df[cruise_df["cruise_type"] == "飛航郵輪"], top=15)
-                if fly_dest.empty:
-                    st.info("此範圍內無飛航郵輪目的地。")
-                else:
-                    st.plotly_chart(hbar(fly_dest, x="訂單數", y="目的地",
-                                         title="國外出發 目的地"),
-                                    use_container_width=True)
-            st.caption("一筆航次經過多個停靠點會分別計入。")
+                _show_dest(cruise_df[cruise_df["cruise_type"] == "飛航郵輪"],
+                           cruise_prev[cruise_prev["cruise_type"] == "飛航郵輪"],
+                           "此範圍內無飛航郵輪目的地。")
+            st.caption("一筆航次經過多個停靠點會分別計入；本期 vs 前期看哪些目的地在升溫。")
 
             # 🗓️ 出發月份（季節性內容月曆）
             st.subheader("🗓️ 出發月份（季節性內容月曆）")
@@ -878,7 +894,7 @@ elif page == "🚢 郵輪":
                 fig_l.update_xaxes(type="category")
                 st.plotly_chart(fig_l, use_container_width=True)
                 st.caption(f"中位數 {lead.median():.0f} 天、平均 {lead.mean():.0f} 天"
-                           f"（約提前 {lead.median()/30:.1f} 個月下單）→ 可據此規劃 EDM／再行銷提前量。")
+                           f"（約提前 {lead.median()/30:.1f} 個月下單）。")
 
 # ════════════════════════════════════════════════════════
 # GIT
