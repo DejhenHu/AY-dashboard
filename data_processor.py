@@ -348,6 +348,35 @@ def _git_region(name: str) -> str:
     return "其他"
 
 
+# 郵輪航線停靠點/目的地關鍵字（供 SEO 內容方向）
+_CRUISE_DESTS = [
+    "那霸", "石垣", "宮古", "沖繩", "鹿兒島", "釜山", "佐世保", "福岡", "濟州", "熊本",
+    "長崎", "麗水", "高知", "大阪", "東京", "橫濱", "靜岡", "神戶", "清水", "京都",
+    "廣島", "青森", "新加坡", "普吉", "檳城", "馬六甲", "吉隆坡", "蘇梅", "熱浪島",
+    "蘭卡威", "峇里", "龍目", "阿拉斯加", "冰河灣", "溫哥華", "西雅圖", "舊金山",
+    "紐西蘭", "加勒比", "地中海", "巴拿馬", "夏威夷", "北海道", "挪威", "丹麥",
+    "瑞典", "冰島", "義大利", "西班牙", "法國", "希臘", "土耳其", "越南", "公海",
+]
+
+
+def cruise_destination_heat(df: pd.DataFrame, top: int = 20) -> pd.DataFrame:
+    """郵輪航線各目的地的提及訂單數與營收（一筆航次含多個停靠點會分別計入）。"""
+    c = df[df["product_line"] == "Cruise"]
+    rows = []
+    for name, amt in zip(c["bnb_name"].astype(str), c["twd_amount"]):
+        for d in _CRUISE_DESTS:
+            if d in name:
+                rows.append((d, amt))
+    if not rows:
+        return pd.DataFrame(columns=["目的地", "訂單數", "營收"])
+    t = pd.DataFrame(rows, columns=["目的地", "營收"])
+    return (t.groupby("目的地")
+             .agg(訂單數=("營收", "size"), 營收=("營收", "sum"))
+             .sort_values("訂單數", ascending=False)
+             .reset_index()
+             .head(top))
+
+
 def git_country_distribution(df: pd.DataFrame) -> pd.DataFrame:
     """GIT 依目的地地區（從商品名萃取）的營收與訂單數。"""
     git = df[df["product_line"] == "GIT"].copy()

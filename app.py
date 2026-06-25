@@ -570,7 +570,8 @@ elif page == "🚢 郵輪":
             len(cruise_prev[cruise_prev["cruise_type"] == "飛航郵輪"]), fmt="count")
 
         st.divider()
-        ctab_home, ctab_fly = st.tabs(["🛳️ 母港出發", "✈️ 飛航郵輪"])
+        ctab_home, ctab_fly, ctab_mkt = st.tabs(
+            ["🛳️ 母港出發", "✈️ 飛航郵輪", "📣 行銷視角"])
 
         # ── 母港出發 ──────────────────────────────────────
         with ctab_home:
@@ -819,6 +820,51 @@ elif page == "🚢 郵輪":
 
                 st.divider()
                 render_cruise_rank(fly_df, fp, dp._cruise_ship, "fly_rank_ship")
+
+        # ── 行銷視角（Google Ads / SEO / CRM）──────────────
+        with ctab_mkt:
+            st.caption("給 Google Ads／SEO／CRM 的郵輪行銷分析（涵蓋全部郵輪、套用側邊欄篩選）。")
+
+            # 🔍 航線目的地熱度（SEO 內容方向）
+            st.subheader("🔍 航線目的地熱度（SEO 內容方向）")
+            dest = dp.cruise_destination_heat(cruise_df, top=20)
+            if dest.empty:
+                st.info("此範圍內無可萃取的目的地。")
+            else:
+                fig_d = hbar(dest, x="訂單數", y="目的地",
+                             title="郵輪航線目的地（依提及訂單數）")
+                st.plotly_chart(fig_d, use_container_width=True)
+                st.caption("一筆航次經過多個停靠點會分別計入；可作為關鍵字與內容主題方向。")
+
+            # 🗓️ 出發月份（季節性內容月曆）
+            st.subheader("🗓️ 出發月份（季節性內容月曆）")
+            mc = cruise_df.copy()
+            mc["出發月份"] = mc["check_in"].dt.to_period("M").astype(str)
+            mc = (mc[mc["出發月份"] != "NaT"]
+                  .groupby("出發月份")
+                  .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
+                  .reset_index())
+            fig_m = px.bar(mc, x="出發月份", y="訂單數",
+                           title="郵輪出發月份分布", hover_data=["營收"])
+            fig_m.update_xaxes(type="category", categoryorder="category ascending")
+            st.plotly_chart(fig_m, use_container_width=True)
+
+            # ⏱️ 預訂前置天數（CRM／Ads 時機）
+            st.subheader("⏱️ 預訂前置天數（出發前多久下單）")
+            lead = (cruise_df["check_in"] - cruise_df["order_date"]).dt.days.dropna()
+            lead = lead[lead >= 0]
+            if lead.empty:
+                st.info("此範圍內無足夠資料計算前置天數。")
+            else:
+                _labels = ["0-30天", "31-60天", "61-90天", "91-120天", "121-180天", "180天以上"]
+                lt = (pd.cut(lead, bins=[-1, 30, 60, 90, 120, 180, 99999], labels=_labels)
+                        .value_counts().reindex(_labels).reset_index())
+                lt.columns = ["前置天數", "訂單數"]
+                fig_l = px.bar(lt, x="前置天數", y="訂單數", title="預訂前置天數分布")
+                fig_l.update_xaxes(type="category")
+                st.plotly_chart(fig_l, use_container_width=True)
+                st.caption(f"中位數 {lead.median():.0f} 天、平均 {lead.mean():.0f} 天"
+                           f"（約提前 {lead.median()/30:.1f} 個月下單）→ 可據此規劃 EDM／再行銷提前量。")
 
 # ════════════════════════════════════════════════════════
 # GIT
