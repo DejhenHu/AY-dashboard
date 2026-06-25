@@ -403,6 +403,50 @@ _SHIP_TBL_COLCFG = {
 }
 
 
+def _diff_color(v):
+    if v > 0:   return "color: green; font-weight: bold"
+    elif v < 0: return "color: red; font-weight: bold"
+    return ""
+
+
+def render_dest_heat(cur_sub: pd.DataFrame, prev_sub: pd.DataFrame,
+                     empty_msg: str, topn: int = 15):
+    """航線目的地熱度：本期 vs 前期（依提及訂單數）。"""
+    cur = (dp.cruise_destination_heat(cur_sub, top=999)[["目的地", "訂單數"]]
+           .rename(columns={"訂單數": "本期"}))
+    prev = (dp.cruise_destination_heat(prev_sub, top=999)[["目的地", "訂單數"]]
+            .rename(columns={"訂單數": "前期"}))
+    m = cur.merge(prev, on="目的地", how="outer").fillna(0)
+    m["本期"] = m["本期"].astype(int)
+    m["前期"] = m["前期"].astype(int)
+    m["差異"] = m["本期"] - m["前期"]
+    m = m.sort_values("本期", ascending=False).head(topn).reset_index(drop=True)
+    if m.empty or m["本期"].sum() == 0:
+        st.info(empty_msg)
+        return
+    st.dataframe(
+        m.style.map(_diff_color, subset=["差異"]).format({"差異": "{:+d}"}),
+        use_container_width=True, hide_index=True)
+
+
+def render_lead_time(sub: pd.DataFrame):
+    """預訂前置天數分布（出發前多久下單）。"""
+    lead = (sub["check_in"] - sub["order_date"]).dt.days.dropna()
+    lead = lead[lead >= 0]
+    if lead.empty:
+        st.info("此範圍內無足夠資料計算前置天數。")
+        return
+    labels = ["0-30天", "31-60天", "61-90天", "91-120天", "121-180天", "180天以上"]
+    lt = (pd.cut(lead, bins=[-1, 30, 60, 90, 120, 180, 99999], labels=labels)
+            .value_counts().reindex(labels).reset_index())
+    lt.columns = ["前置天數", "訂單數"]
+    fig = px.bar(lt, x="前置天數", y="訂單數", title="預訂前置天數分布")
+    fig.update_xaxes(type="category")
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(f"中位數 {lead.median():.0f} 天、平均 {lead.mean():.0f} 天"
+               f"（約提前 {lead.median()/30:.1f} 個月下單）。")
+
+
 st.subheader(page)
 
 
@@ -570,8 +614,7 @@ elif page == "🚢 郵輪":
             len(cruise_prev[cruise_prev["cruise_type"] == "飛航郵輪"]), fmt="count")
 
         st.divider()
-        ctab_home, ctab_fly, ctab_mkt = st.tabs(
-            ["🛳️ 母港出發", "✈️ 飛航郵輪", "📣 行銷視角"])
+        ctab_home, ctab_fly = st.tabs(["🛳️ 母港出發", "✈️ 飛航郵輪"])
 
         # ── 母港出發 ──────────────────────────────────────
         with ctab_home:
@@ -708,6 +751,13 @@ elif page == "🚢 郵輪":
                 st.divider()
                 render_cruise_rank(homeport_df, hp, dp._homeport_ship, "hp_rank_ship")
 
+                st.divider()
+                st.subheader("🔍 航線目的地熱度")
+                render_dest_heat(homeport_df, hp, "此範圍內無母港出發目的地。")
+
+                st.subheader("⏱️ 預訂前置天數（出發前多久下單）")
+                render_lead_time(homeport_df)
+
         # ── 飛航郵輪 ──────────────────────────────────────
         with ctab_fly:
             if fly_df.empty:
@@ -821,80 +871,12 @@ elif page == "🚢 郵輪":
                 st.divider()
                 render_cruise_rank(fly_df, fp, dp._cruise_ship, "fly_rank_ship")
 
-        # ── 行銷視角（Google Ads / SEO / CRM）──────────────
-        with ctab_mkt:
+                st.divider()
+                st.subheader("🔍 航線目的地熱度")
+                render_dest_heat(fly_df, fp, "此範圍內無飛航郵輪目的地。")
 
-            def _mkt_color_diff(v):
-                if v > 0:   return "color: green; font-weight: bold"
-                elif v < 0: return "color: red; font-weight: bold"
-                return ""
-
-            def _dest_cmp(cur_sub, prev_sub, topn=15):
-                cur = (dp.cruise_destination_heat(cur_sub, top=999)[["目的地", "訂單數"]]
-                       .rename(columns={"訂單數": "本期"}))
-                prev = (dp.cruise_destination_heat(prev_sub, top=999)[["目的地", "訂單數"]]
-                        .rename(columns={"訂單數": "前期"}))
-                m = cur.merge(prev, on="目的地", how="outer").fillna(0)
-                m["本期"] = m["本期"].astype(int)
-                m["前期"] = m["前期"].astype(int)
-                m["差異"] = m["本期"] - m["前期"]
-                return (m.sort_values("本期", ascending=False)
-                         .head(topn).reset_index(drop=True))
-
-            def _show_dest(cur_sub, prev_sub, empty_msg):
-                d = _dest_cmp(cur_sub, prev_sub)
-                if d.empty or d["本期"].sum() == 0:
-                    st.info(empty_msg)
-                else:
-                    st.dataframe(
-                        d.style.map(_mkt_color_diff, subset=["差異"])
-                               .format({"差異": "{:+d}"}),
-                        use_container_width=True, hide_index=True)
-
-            # 🔍 航線目的地熱度（本期 vs 前期，依台灣/國外出發分類）
-            st.subheader("🔍 航線目的地熱度")
-            dcol1, dcol2 = st.columns(2)
-            with dcol1:
-                st.markdown("**🛳️ 台灣出發（母港）**")
-                _show_dest(cruise_df[cruise_df["cruise_type"] == "母港出發"],
-                           cruise_prev[cruise_prev["cruise_type"] == "母港出發"],
-                           "此範圍內無母港出發目的地。")
-            with dcol2:
-                st.markdown("**✈️ 國外出發（飛航）**")
-                _show_dest(cruise_df[cruise_df["cruise_type"] == "飛航郵輪"],
-                           cruise_prev[cruise_prev["cruise_type"] == "飛航郵輪"],
-                           "此範圍內無飛航郵輪目的地。")
-            st.caption("一筆航次經過多個停靠點會分別計入；本期 vs 前期看哪些目的地在升溫。")
-
-            # 🗓️ 出發月份（季節性內容月曆）
-            st.subheader("🗓️ 出發月份（季節性內容月曆）")
-            mc = cruise_df.copy()
-            mc["出發月份"] = mc["check_in"].dt.to_period("M").astype(str)
-            mc = (mc[mc["出發月份"] != "NaT"]
-                  .groupby("出發月份")
-                  .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
-                  .reset_index())
-            fig_m = px.bar(mc, x="出發月份", y="訂單數",
-                           title="郵輪出發月份分布", hover_data=["營收"])
-            fig_m.update_xaxes(type="category", categoryorder="category ascending")
-            st.plotly_chart(fig_m, use_container_width=True)
-
-            # ⏱️ 預訂前置天數（CRM／Ads 時機）
-            st.subheader("⏱️ 預訂前置天數（出發前多久下單）")
-            lead = (cruise_df["check_in"] - cruise_df["order_date"]).dt.days.dropna()
-            lead = lead[lead >= 0]
-            if lead.empty:
-                st.info("此範圍內無足夠資料計算前置天數。")
-            else:
-                _labels = ["0-30天", "31-60天", "61-90天", "91-120天", "121-180天", "180天以上"]
-                lt = (pd.cut(lead, bins=[-1, 30, 60, 90, 120, 180, 99999], labels=_labels)
-                        .value_counts().reindex(_labels).reset_index())
-                lt.columns = ["前置天數", "訂單數"]
-                fig_l = px.bar(lt, x="前置天數", y="訂單數", title="預訂前置天數分布")
-                fig_l.update_xaxes(type="category")
-                st.plotly_chart(fig_l, use_container_width=True)
-                st.caption(f"中位數 {lead.median():.0f} 天、平均 {lead.mean():.0f} 天"
-                           f"（約提前 {lead.median()/30:.1f} 個月下單）。")
+                st.subheader("⏱️ 預訂前置天數（出發前多久下單）")
+                render_lead_time(fly_df)
 
 # ════════════════════════════════════════════════════════
 # GIT
