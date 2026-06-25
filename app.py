@@ -825,16 +825,30 @@ elif page == "🚢 郵輪":
         with ctab_mkt:
             st.caption("給 Google Ads／SEO／CRM 的郵輪行銷分析（涵蓋全部郵輪、套用側邊欄篩選）。")
 
-            # 🔍 航線目的地熱度（SEO 內容方向）
-            st.subheader("🔍 航線目的地熱度（SEO 內容方向）")
-            dest = dp.cruise_destination_heat(cruise_df, top=20)
-            if dest.empty:
-                st.info("此範圍內無可萃取的目的地。")
-            else:
-                fig_d = hbar(dest, x="訂單數", y="目的地",
-                             title="郵輪航線目的地（依提及訂單數）")
-                st.plotly_chart(fig_d, use_container_width=True)
-                st.caption("一筆航次經過多個停靠點會分別計入；可作為關鍵字與內容主題方向。")
+            # 🔍 航線目的地熱度（依台灣出發／國外出發分類）
+            st.subheader("🔍 航線目的地熱度")
+            dcol1, dcol2 = st.columns(2)
+            with dcol1:
+                st.markdown("**🛳️ 台灣出發（母港）**")
+                hp_dest = dp.cruise_destination_heat(
+                    cruise_df[cruise_df["cruise_type"] == "母港出發"], top=15)
+                if hp_dest.empty:
+                    st.info("此範圍內無母港出發目的地。")
+                else:
+                    st.plotly_chart(hbar(hp_dest, x="訂單數", y="目的地",
+                                         title="台灣出發 目的地"),
+                                    use_container_width=True)
+            with dcol2:
+                st.markdown("**✈️ 國外出發（飛航）**")
+                fly_dest = dp.cruise_destination_heat(
+                    cruise_df[cruise_df["cruise_type"] == "飛航郵輪"], top=15)
+                if fly_dest.empty:
+                    st.info("此範圍內無飛航郵輪目的地。")
+                else:
+                    st.plotly_chart(hbar(fly_dest, x="訂單數", y="目的地",
+                                         title="國外出發 目的地"),
+                                    use_container_width=True)
+            st.caption("一筆航次經過多個停靠點會分別計入。")
 
             # 🗓️ 出發月份（季節性內容月曆）
             st.subheader("🗓️ 出發月份（季節性內容月曆）")

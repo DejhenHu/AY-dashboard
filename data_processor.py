@@ -364,8 +364,10 @@ def cruise_destination_heat(df: pd.DataFrame, top: int = 20) -> pd.DataFrame:
     c = df[df["product_line"] == "Cruise"]
     rows = []
     for name, amt in zip(c["bnb_name"].astype(str), c["twd_amount"]):
+        # 去掉品牌字「地中海郵輪」，避免 MSC 母港船被誤判成「地中海」目的地
+        clean = name.replace("地中海郵輪", "")
         for d in _CRUISE_DESTS:
-            if d in name:
+            if d in clean:
                 rows.append((d, amt))
     if not rows:
         return pd.DataFrame(columns=["目的地", "訂單數", "營收"])
