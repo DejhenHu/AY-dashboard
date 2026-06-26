@@ -1194,7 +1194,10 @@ elif page == "📶 WAU":
         in_prog = wau[wau["週起始日"] == cur_week_sun]
 
         # KPI：比「最新完整週 vs 前一完整週」（避免拿未完成的本週相比）
-        c1, c2 = st.columns(2)
+        if not in_prog.empty:
+            c1, c2, c3 = st.columns(3)
+        else:
+            c1, c2 = st.columns(2)
         if not complete.empty:
             lc = complete.iloc[-1]
             pc = int(complete.iloc[-2]["WAU"]) if len(complete) >= 2 else 0
@@ -1206,7 +1209,11 @@ elif page == "📶 WAU":
             c1.metric(f"最新週 WAU（{lc['週']}）", f"{int(lc['WAU']):,}")
         if not in_prog.empty:
             ip = in_prog.iloc[0]
-            c2.metric(f"本週進行中（{ip['週']}，未完整）", f"{int(ip['WAU']):,}")
+            days_elapsed = min((_today - cur_week_sun.date()).days + 1, 7)
+            est = int(round(int(ip["WAU"]) / days_elapsed * 7)) if days_elapsed else int(ip["WAU"])
+            c2.metric(f"本週進行中（{ip['週']}，第 {days_elapsed} 天）", f"{int(ip['WAU']):,}")
+            c3.metric("本週預估 WAU（推估）", f"{est:,}",
+                      delta=f"{est - int(ip['WAU']):+,} 推估剩餘", delta_color="off")
         else:
             c2.metric("區間平均 WAU", f"{int(wau['WAU'].mean()):,}")
 
@@ -1214,7 +1221,8 @@ elif page == "📶 WAU":
         fig.update_xaxes(type="category")
         st.plotly_chart(fig, use_container_width=True)
         st.caption("WAU 為 GA4 全站每週活躍使用者（週日為一週開始）。"
-                   "KPI 以「最新完整週」相比；本週進行中（未滿一週）僅另列參考，趨勢圖最後一點亦含本週。")
+                   "KPI 以「最新完整週」相比；本週為進行中。"
+                   "「本週預估」＝本週累計 ÷ 已過天數 × 7（線性外推；因不重複使用者會遞減累積，實際通常略低於此）。")
 
         # 各管道 WAU 趨勢（上下排列，與上方每週趨勢同寬便於對比；直接/未知單獨一張）
         st.subheader("各管道 WAU 趨勢")
