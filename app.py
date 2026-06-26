@@ -1204,7 +1204,7 @@ elif page == "📶 WAU":
         tbl = wau[["週", "WAU", "週增減%"]].iloc[::-1].reset_index(drop=True)
         st.dataframe(tbl, use_container_width=True, hide_index=True)
 
-        # 各管道 WAU 趨勢
+        # 各管道 WAU 趨勢（直接/未知量太大，單獨拆出避免壓平其他線）
         st.subheader("各管道 WAU 趨勢")
         ga4 = dp.load_ga4_channel()
         if ga4.empty:
@@ -1213,11 +1213,22 @@ elif page == "📶 WAU":
             keep = set(wau["週起始日"])  # 與上方相同區間
             ga4w = ga4[ga4["週起始日"].isin(keep)].copy()
             ga4w["週"] = ga4w["週起始日"].dt.strftime("%Y-%m-%d")
-            fig_c = px.line(ga4w.sort_values("週起始日"), x="週", y="使用者",
-                            color="管道", markers=True, title="各管道每週 WAU",
-                            category_orders={"管道": dp.CHANNEL_BUCKETS})
-            fig_c.update_xaxes(type="category")
-            st.plotly_chart(fig_c, use_container_width=True)
+            others = ga4w[ga4w["管道"] != "直接/未知"]
+            direct = ga4w[ga4w["管道"] == "直接/未知"]
+            gc1, gc2 = st.columns([3, 2])
+            with gc1:
+                fig_c = px.line(others.sort_values("週起始日"), x="週", y="使用者",
+                                color="管道", markers=True, title="各管道（不含直接/未知）",
+                                category_orders={"管道": [c for c in dp.CHANNEL_BUCKETS
+                                                         if c != "直接/未知"]})
+                fig_c.update_xaxes(type="category")
+                st.plotly_chart(fig_c, use_container_width=True)
+            with gc2:
+                fig_d = px.line(direct.sort_values("週起始日"), x="週", y="使用者",
+                                markers=True, title="直接/未知")
+                fig_d.update_xaxes(type="category")
+                fig_d.update_traces(line_color="#999")
+                st.plotly_chart(fig_d, use_container_width=True)
 
 # ════════════════════════════════════════════════════════
 # 自動洞察
