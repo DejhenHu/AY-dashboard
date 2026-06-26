@@ -9,6 +9,13 @@ SHEET_CSV_URL = (
     "/export?format=csv&gid=100183531"
 )
 
+# GA4 每週活躍使用者(WAU)：A 欄 yearWeek(YYYYWW)、B 欄 activeUsers
+WAU_CSV_URL = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1fML4MGM1WJZmYA_KGdXJ0qc7il2Py_Kn7JZwzzAezzQ"
+    "/gviz/tq?tqx=out:csv&gid=1079446904"
+)
+
 ACCOMMODATION_TYPES = {
     "Bnb / Apartment", "Economy Hotel", "Hostel",
     "Hotel", "Motel", "Serviced apartment", "Villa"
@@ -46,6 +53,34 @@ def load_data() -> pd.DataFrame:
     df = pd.read_csv(SHEET_CSV_URL, dtype=str)
     df.rename(columns=COLUMN_RENAME, inplace=True)
     return _clean(df)
+
+
+def _yearweek_to_sunday(yw: str) -> "pd.Timestamp":
+    """GA4 yearWeek(YYYYWW) → 該週起始日(週日)。GA4 第1週為含 1/1 的那一週。"""
+    y, w = int(yw[:4]), int(yw[4:])
+    jan1 = pd.Timestamp(year=y, month=1, day=1)
+    week01 = jan1 - pd.Timedelta(days=(jan1.dayofweek + 1) % 7)  # 1/1 當週的週日
+    return week01 + pd.Timedelta(weeks=w - 1)
+
+
+@st.cache_data(ttl=1800)
+def load_wau() -> pd.DataFrame:
+    """讀 GA4 每週活躍使用者；自動抓 A 欄為 6 位數 yearWeek 的列。回傳 週起始日 / WAU。"""
+    try:
+        raw = pd.read_csv(WAU_CSV_URL, header=None, dtype=str)
+    except Exception:
+        return pd.DataFrame(columns=["週起始日", "WAU"])
+    a = raw[0].astype(str).str.strip()
+    mask = a.str.match(r"^\d{6}$")
+    wau = pd.DataFrame({
+        "yearWeek": a[mask].values,
+        "WAU": pd.to_numeric(raw.loc[mask, 1], errors="coerce").values,
+    }).dropna()
+    if wau.empty:
+        return pd.DataFrame(columns=["週起始日", "WAU"])
+    wau["WAU"] = wau["WAU"].astype(int)
+    wau["週起始日"] = wau["yearWeek"].apply(_yearweek_to_sunday)
+    return wau.sort_values("週起始日").reset_index(drop=True)[["週起始日", "WAU"]]
 
 
 def _clean(df: pd.DataFrame) -> pd.DataFrame:

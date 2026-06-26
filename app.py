@@ -4,6 +4,7 @@ import os
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import date, timedelta
 
@@ -554,6 +555,51 @@ if page == "📊 總覽":
         st.plotly_chart(fig_k, use_container_width=True)
         st.caption(f"開盤=期間首日 GMV、收盤=末日 GMV、最高/最低=期間內單日 GMV 最大/最小。"
                    f"均線為收盤的移動平均（MA5＝近 5 {_unit}）。紅漲綠跌（台股慣例）。")
+
+    # ── 每週 WAU vs 訂單數（GA4）──────────────────────────────
+    st.subheader("📶 每週 WAU vs 訂單數（GA4 全站）")
+    wau = dp.load_wau()
+    if wau.empty:
+        st.info("目前讀不到 GA4 WAU 資料（請確認來源試算表可存取）。")
+    else:
+        # 訂單依週日起算的週彙整
+        _o = df.copy()
+        _o["週起始日"] = (_o["order_date"]
+                        - pd.to_timedelta((_o["order_date"].dt.dayofweek + 1) % 7, unit="D")
+                        ).dt.normalize()
+        ow = _o.groupby("週起始日")["order_id"].count().reset_index(name="訂單數")
+        wk = wau.merge(ow, on="週起始日", how="inner")
+        # 限定在側邊欄日期區間內
+        wk = wk[(wk["週起始日"] >= pd.Timestamp(start_date) - timedelta(days=6))
+                & (wk["週起始日"] <= pd.Timestamp(end_date))]
+        if len(wk) < 1:
+            st.info("此日期區間內沒有可對照的 WAU 週資料，請拉長左側日期範圍。")
+        else:
+            wk = wk.sort_values("週起始日")
+            wk["轉換率%"] = (wk["訂單數"] / wk["WAU"] * 100).round(2)
+            wk["週"] = wk["週起始日"].dt.strftime("%Y-%m-%d")
+            mc1, mc2 = st.columns([3, 2])
+            with mc1:
+                fig_w = make_subplots(specs=[[{"secondary_y": True}]])
+                fig_w.add_trace(go.Bar(x=wk["週"], y=wk["訂單數"], name="訂單數",
+                                       marker_color="#1f77b4"), secondary_y=False)
+                fig_w.add_trace(go.Scatter(x=wk["週"], y=wk["WAU"], name="WAU",
+                                           mode="lines+markers", line=dict(color="#ff7f0e")),
+                                secondary_y=True)
+                fig_w.update_xaxes(type="category")
+                fig_w.update_yaxes(title_text="訂單數", secondary_y=False)
+                fig_w.update_yaxes(title_text="WAU", secondary_y=True)
+                fig_w.update_layout(title="每週 WAU vs 訂單數", height=400,
+                                    legend=dict(orientation="h", yanchor="bottom",
+                                                y=1.02, xanchor="right", x=1))
+                st.plotly_chart(fig_w, use_container_width=True)
+            with mc2:
+                fig_cr = px.line(wk, x="週", y="轉換率%", markers=True,
+                                 title="全站轉換率（訂單數 ÷ WAU）")
+                fig_cr.update_xaxes(type="category")
+                st.plotly_chart(fig_cr, use_container_width=True)
+            st.caption("WAU 為 GA4 全站每週活躍使用者；轉換率＝該週訂單數 ÷ WAU。"
+                       "最新一週可能未完整。")
 
     st.subheader("各產品線明細")
     prev_pl = (df_prev.groupby("product_line")
