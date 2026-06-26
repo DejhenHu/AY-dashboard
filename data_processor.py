@@ -120,7 +120,10 @@ def _cruise_type(row) -> str:
     # 3) 其他泛用登船字眼（非台灣）→ 飛航
     if _GENERIC_EMBARK_RE.search(name):
         return "飛航郵輪"
-    # 4) 名稱未標港口：用母港船隊船名補判
+    # 4) 移航航次（基隆出發者已在 2 歸母港）：其餘從國外出發 → 飛航
+    if "移航" in name:
+        return "飛航郵輪"
+    # 5) 名稱未標港口：用母港船隊船名補判
     if any(s in name for s in _TAIWAN_FLEET_SHIPS):
         return "母港出發"
     return "飛航郵輪"
@@ -264,9 +267,10 @@ _HOMEPORT_FLEET = [
 def _homeport_ship(name: str) -> str:
     """母港郵輪：依品牌關鍵字對應到固定船名（雜項命名一併歸位）。"""
     n = str(name).lower()
+    suffix = "（移航）" if "移航" in str(name) else ""
     for keywords, ship in _HOMEPORT_FLEET:
         if any(kw in n for kw in keywords):
-            return ship
+            return ship + suffix
     return _cruise_ship(name)
 
 
@@ -297,7 +301,10 @@ def _cruise_ship(name: str) -> str:
     # 去掉夾在中間的品牌/連接字
     for w in ["郵輪", "遊輪", "MSC", "地中海"]:
         ship = ship.replace(w, "")
-    return ship or "（無船名）"
+    ship = ship or "（無船名）"
+    if "移航" in str(name):  # 移航航次獨立標示
+        ship += "（移航）"
+    return ship
 
 
 def cruise_by_brand(df: pd.DataFrame) -> pd.DataFrame:
