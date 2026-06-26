@@ -16,6 +16,27 @@ WAU_CSV_URL = (
     "/gviz/tq?tqx=out:csv&gid=1079446904"
 )
 
+# GA4 每週各管道使用者：A 欄 yearWeek、B 欄 sessionDefaultChannelGroup、C 欄 activeUsers
+GA4_CHANNEL_CSV_URL = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1fML4MGM1WJZmYA_KGdXJ0qc7il2Py_Kn7JZwzzAezzQ"
+    "/gviz/tq?tqx=out:csv&gid=536190960"
+)
+
+# 管道桶顯示順序
+CHANNEL_BUCKETS = ["付費廣告", "自然搜尋", "社群/LINE", "推薦/聯盟", "CRM", "直接/未知"]
+
+# GA4 管道分組 → 管道桶
+_GA4_CHANNEL_BUCKET = {
+    "Paid Search": "付費廣告", "Paid Social": "付費廣告", "Paid Other": "付費廣告",
+    "Display": "付費廣告", "Paid Video": "付費廣告", "Cross-network": "付費廣告",
+    "Organic Search": "自然搜尋",
+    "Organic Social": "社群/LINE", "Organic Video": "社群/LINE",
+    "Referral": "推薦/聯盟",
+    "Email": "CRM", "SMS": "CRM", "Mobile Push Notifications": "CRM",
+    "Direct": "直接/未知", "Unassigned": "直接/未知",
+}
+
 ACCOMMODATION_TYPES = {
     "Bnb / Apartment", "Economy Hotel", "Hostel",
     "Hotel", "Motel", "Serviced apartment", "Villa"
@@ -81,6 +102,28 @@ def load_wau() -> pd.DataFrame:
     wau["WAU"] = wau["WAU"].astype(int)
     wau["週起始日"] = wau["yearWeek"].apply(_yearweek_to_sunday)
     return wau.sort_values("週起始日").reset_index(drop=True)[["週起始日", "WAU"]]
+
+
+@st.cache_data(ttl=1800)
+def load_ga4_channel() -> pd.DataFrame:
+    """GA4 各管道每週使用者 → 週起始日 / 管道(桶) / 使用者。"""
+    try:
+        raw = pd.read_csv(GA4_CHANNEL_CSV_URL, header=None, dtype=str)
+    except Exception:
+        return pd.DataFrame(columns=["週起始日", "管道", "使用者"])
+    a = raw[0].astype(str).str.strip()
+    mask = a.str.match(r"^\d{6}$")
+    d = pd.DataFrame({
+        "yearWeek": a[mask].values,
+        "channel": raw.loc[mask, 1].astype(str).values,
+        "使用者": pd.to_numeric(raw.loc[mask, 2], errors="coerce").values,
+    }).dropna()
+    if d.empty:
+        return pd.DataFrame(columns=["週起始日", "管道", "使用者"])
+    d["使用者"] = d["使用者"].astype(int)
+    d["管道"] = d["channel"].map(_GA4_CHANNEL_BUCKET).fillna("直接/未知")
+    d["週起始日"] = d["yearWeek"].apply(_yearweek_to_sunday)
+    return d.groupby(["週起始日", "管道"])["使用者"].sum().reset_index()
 
 
 def _clean(df: pd.DataFrame) -> pd.DataFrame:

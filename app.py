@@ -1204,6 +1204,21 @@ elif page == "📶 WAU":
         tbl = wau[["週", "WAU", "週增減%"]].iloc[::-1].reset_index(drop=True)
         st.dataframe(tbl, use_container_width=True, hide_index=True)
 
+        # 各管道 WAU 趨勢
+        st.subheader("各管道 WAU 趨勢")
+        ga4 = dp.load_ga4_channel()
+        if ga4.empty:
+            st.info("目前讀不到 GA4 管道資料。")
+        else:
+            keep = set(wau["週起始日"])  # 與上方相同區間
+            ga4w = ga4[ga4["週起始日"].isin(keep)].copy()
+            ga4w["週"] = ga4w["週起始日"].dt.strftime("%Y-%m-%d")
+            fig_c = px.line(ga4w.sort_values("週起始日"), x="週", y="使用者",
+                            color="管道", markers=True, title="各管道每週 WAU",
+                            category_orders={"管道": dp.CHANNEL_BUCKETS})
+            fig_c.update_xaxes(type="category")
+            st.plotly_chart(fig_c, use_container_width=True)
+
 # ════════════════════════════════════════════════════════
 # 自動洞察
 # ════════════════════════════════════════════════════════
