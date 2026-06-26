@@ -1242,16 +1242,26 @@ elif page == "📶 WAU":
             fig_all.update_xaxes(type="category")
             st.plotly_chart(fig_all, use_container_width=True)
 
-            # ② 小倍數：每管道一格、各自 Y 軸刻度，看自己的起伏
-            st.markdown("**各管道分開看（各自刻度，比自己的趨勢）**")
-            fig_f = px.line(ga4w, x="週", y="使用者", facet_col="管道",
-                            facet_col_wrap=2, markers=True,
-                            category_orders={"管道": dp.CHANNEL_BUCKETS})
-            fig_f.update_yaxes(matches=None)  # 各格獨立 Y 軸
-            fig_f.update_xaxes(type="category")
-            fig_f.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-            fig_f.update_layout(showlegend=False, height=620)
-            st.plotly_chart(fig_f, use_container_width=True)
+            # ② 各管道分開看（一排一格，各自刻度，標題附 vs 前一完整週）
+            st.markdown("**各管道分開看（各自趨勢，vs 前一完整週）**")
+            for ch in dp.CHANNEL_BUCKETS:
+                sub = ga4w[ga4w["管道"] == ch].sort_values("週起始日")
+                if sub.empty:
+                    continue
+                comp = sub[sub["週起始日"] < cur_week_sun]
+                if len(comp) >= 2:
+                    cur_v, prev_v = int(comp.iloc[-1]["使用者"]), int(comp.iloc[-2]["使用者"])
+                    pct = f"（{(cur_v-prev_v)/prev_v*100:+.1f}%）" if prev_v else ""
+                    head = f"{ch}　最新完整週 {cur_v:,}　vs 前一完整週 {cur_v-prev_v:+,}{pct}"
+                elif len(comp) == 1:
+                    head = f"{ch}　最新完整週 {int(comp.iloc[-1]['使用者']):,}"
+                else:
+                    head = ch
+                st.markdown(f"**{head}**")
+                figx = px.line(sub, x="週", y="使用者", markers=True)
+                figx.update_xaxes(type="category", title=None)
+                figx.update_layout(height=240, margin=dict(l=0, r=0, t=10, b=0))
+                st.plotly_chart(figx, use_container_width=True)
 
 # ════════════════════════════════════════════════════════
 # 自動洞察
