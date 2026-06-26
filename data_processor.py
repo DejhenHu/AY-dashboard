@@ -238,12 +238,17 @@ def _cruise_brand(name: str) -> str:
         return "公主遊輪"
     if "星夢" in n or "genting dream" in n or "雲頂夢" in n:
         return "星夢郵輪"
-    if "挪威" in n or "ncl" in n or "norwegian" in n:
+    if ("挪威" in n or "ncl" in n or "norwegian" in n
+            or "美國之傲" in str(name) or "pride of america" in n):
         return "挪威郵輪"
     if "皇后" in n or "cunard" in n:
         return "皇后郵輪"
     if "三井" in n or "富士" in n:
         return "三井"
+    if "名人" in str(name) or "celebrity" in n:
+        return "名人郵輪"
+    if "皇家加勒比" in str(name) or "royal caribbean" in n:
+        return "皇家加勒比"
     return "其他郵輪"
 
 
