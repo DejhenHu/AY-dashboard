@@ -1186,19 +1186,35 @@ elif page == "📶 WAU":
         wau = wau.reset_index(drop=True)
         wau["週"] = wau["週起始日"].dt.strftime("%Y-%m-%d")
 
-        # 最新週 KPI（含與前一週比較）
-        last = wau.iloc[-1]
-        prev_wau = int(wau.iloc[-2]["WAU"]) if len(wau) >= 2 else 0
-        d = int(last["WAU"]) - prev_wau
+        # 本週（進行中）週日起始日：用來區分「完整週」與「未完整的本週」
+        _today = date.today()
+        cur_week_sun = (pd.Timestamp(_today)
+                        - pd.Timedelta(days=(_today.weekday() + 1) % 7)).normalize()
+        complete = wau[wau["週起始日"] < cur_week_sun]
+        in_prog = wau[wau["週起始日"] == cur_week_sun]
+
+        # KPI：比「最新完整週 vs 前一完整週」（避免拿未完成的本週相比）
         c1, c2 = st.columns(2)
-        c1.metric(f"最新週 WAU（{last['週']}）", f"{int(last['WAU']):,}",
-                  delta=f"{d:+,}（前一週 {prev_wau:,}）" if prev_wau else None)
-        c2.metric("區間平均 WAU", f"{int(wau['WAU'].mean()):,}")
+        if not complete.empty:
+            lc = complete.iloc[-1]
+            pc = int(complete.iloc[-2]["WAU"]) if len(complete) >= 2 else 0
+            d = int(lc["WAU"]) - pc
+            c1.metric(f"最新完整週 WAU（{lc['週']}）", f"{int(lc['WAU']):,}",
+                      delta=f"{d:+,}（前一週 {pc:,}）" if pc else None)
+        else:
+            lc = wau.iloc[-1]
+            c1.metric(f"最新週 WAU（{lc['週']}）", f"{int(lc['WAU']):,}")
+        if not in_prog.empty:
+            ip = in_prog.iloc[0]
+            c2.metric(f"本週進行中（{ip['週']}，未完整）", f"{int(ip['WAU']):,}")
+        else:
+            c2.metric("區間平均 WAU", f"{int(wau['WAU'].mean()):,}")
 
         fig = px.line(wau, x="週", y="WAU", markers=True, title="每週 WAU 趨勢")
         fig.update_xaxes(type="category")
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("WAU 為 GA4 全站每週活躍使用者（週日為一週開始）；最新一週可能未完整。")
+        st.caption("WAU 為 GA4 全站每週活躍使用者（週日為一週開始）。"
+                   "KPI 以「最新完整週」相比；本週進行中（未滿一週）僅另列參考，趨勢圖最後一點亦含本週。")
 
         # 各管道 WAU 趨勢（上下排列，與上方每週趨勢同寬便於對比；直接/未知單獨一張）
         st.subheader("各管道 WAU 趨勢")
