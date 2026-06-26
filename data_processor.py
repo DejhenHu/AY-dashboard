@@ -273,8 +273,18 @@ def _homeport_ship(name: str) -> str:
 _SHIP_RE = re.compile(r"([一-鿿A-Za-z]+號)")
 
 
+# 英文船名（名稱無「號」字）的特例對應
+_SHIP_ALIASES = {
+    "xcel": "名人極上號",
+}
+
+
 def _cruise_ship(name: str) -> str:
     """從商品名稱萃取船名（XX號），並清理黏在前面的品牌字，讓同船的不同命名能合併。"""
+    low = str(name).lower()
+    for kw, ship in _SHIP_ALIASES.items():
+        if kw in low:
+            return ship
     m = _SHIP_RE.search(str(name))
     if not m:
         return "（無船名）"
