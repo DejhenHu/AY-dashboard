@@ -1172,65 +1172,37 @@ elif page == "🔍 訂單查詢":
 # WAU
 # ════════════════════════════════════════════════════════
 elif page == "📶 WAU":
-    st.caption("GA4 各管道流量 vs 訂單（依管道桶比對）。"
-               "此頁**不受側邊欄篩選影響**，使用下方獨立區間。")
+    st.caption("GA4 全站每週活躍使用者（WAU）趨勢。此頁**不受側邊欄篩選影響**，使用下方獨立區間。")
     win = st.selectbox("顯示區間", ["近12週", "近26週", "近52週", "全部"], index=0)
 
-    ga4 = dp.load_ga4_channel()
-    if ga4.empty:
-        st.info("目前讀不到 GA4 管道資料（請確認來源試算表可存取）。")
+    wau = dp.load_wau()
+    if wau.empty:
+        st.info("目前讀不到 GA4 WAU 資料（請確認來源試算表可存取）。")
     else:
-        weeks = sorted(ga4["週起始日"].unique())
+        wau = wau.sort_values("週起始日")
         _n = {"近12週": 12, "近26週": 26, "近52週": 52}.get(win)
-        keep = weeks[-_n:] if _n else weeks
-        ga4w = ga4[ga4["週起始日"].isin(keep)]
-        st.caption(f"統計區間：{pd.Timestamp(keep[0]).strftime('%Y-%m-%d')} ～ "
-                   f"{pd.Timestamp(keep[-1]).strftime('%Y-%m-%d')}（{len(keep)} 週）")
+        if _n:
+            wau = wau.tail(_n)
+        wau = wau.reset_index(drop=True)
+        wau["週"] = wau["週起始日"].dt.strftime("%Y-%m-%d")
+        wau["週增減%"] = (wau["WAU"].pct_change() * 100).round(1)
 
-        # 訂單依管道桶
-        _o = df_all.copy()
-        _o["管道"] = _o["affiliate_id"].apply(dp._order_channel)
-        _o = _o[_o["管道"].notna()]
-        _o["週起始日"] = (_o["order_date"]
-                        - pd.to_timedelta((_o["order_date"].dt.dayofweek + 1) % 7, unit="D")
-                        ).dt.normalize()
-        ow = _o[_o["週起始日"].isin(keep)]
+        # 最新週 KPI（含與前一週比較）
+        last = wau.iloc[-1]
+        prev_wau = int(wau.iloc[-2]["WAU"]) if len(wau) >= 2 else 0
+        d = int(last["WAU"]) - prev_wau
+        c1, c2 = st.columns(2)
+        c1.metric(f"最新週 WAU（{last['週']}）", f"{int(last['WAU']):,}",
+                  delta=f"{d:+,}（前一週 {prev_wau:,}）" if prev_wau else None)
+        c2.metric("區間平均 WAU", f"{int(wau['WAU'].mean()):,}")
 
-        gu = ga4w.groupby("管道")["使用者"].sum()
-        oo = ow.groupby("管道")["order_id"].count()
-        tbl = pd.DataFrame({"管道": dp.CHANNEL_BUCKETS})
-        tbl["GA4使用者"] = tbl["管道"].map(gu).fillna(0).astype(int)
-        tbl["訂單數"] = tbl["管道"].map(oo).fillna(0).astype(int)
-        tbl["轉換率%"] = tbl.apply(
-            lambda r: round(r["訂單數"] / r["GA4使用者"] * 100, 2) if r["GA4使用者"] > 0 else 0.0,
-            axis=1)
+        fig = px.line(wau, x="週", y="WAU", markers=True, title="每週 WAU 趨勢")
+        fig.update_xaxes(type="category")
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption("WAU 為 GA4 全站每週活躍使用者（週日為一週開始）；最新一週可能未完整。")
 
-        st.subheader("各管道：GA4 使用者 vs 訂單 vs 轉換率")
-        st.dataframe(
-            tbl.style.format({"GA4使用者": "{:,}", "訂單數": "{:,}", "轉換率%": "{:.2f}%"}),
-            use_container_width=True, hide_index=True)
-        st.caption("⚠️「直接/未知」與「自然搜尋」含大量未標記訂單，轉換率僅供參考；"
-                   "付費廣告／社群LINE／推薦聯盟／CRM 因標籤明確較可信。")
-
-        # 流量結構 vs 訂單結構（堆疊面積）
-        ga4w2 = ga4w.copy()
-        ga4w2["週"] = ga4w2["週起始日"].dt.strftime("%Y-%m-%d")
-        ow2 = (ow.groupby(["週起始日", "管道"])["order_id"].count()
-                 .reset_index(name="訂單數"))
-        ow2["週"] = ow2["週起始日"].dt.strftime("%Y-%m-%d")
-        ac1, ac2 = st.columns(2)
-        with ac1:
-            fig_u = px.area(ga4w2.sort_values("週起始日"), x="週", y="使用者", color="管道",
-                            title="GA4 各管道使用者趨勢",
-                            category_orders={"管道": dp.CHANNEL_BUCKETS})
-            fig_u.update_xaxes(type="category")
-            st.plotly_chart(fig_u, use_container_width=True)
-        with ac2:
-            fig_o = px.area(ow2.sort_values("週起始日"), x="週", y="訂單數", color="管道",
-                            title="各管道訂單趨勢",
-                            category_orders={"管道": dp.CHANNEL_BUCKETS})
-            fig_o.update_xaxes(type="category")
-            st.plotly_chart(fig_o, use_container_width=True)
+        tbl = wau[["週", "WAU", "週增減%"]].iloc[::-1].reset_index(drop=True)
+        st.dataframe(tbl, use_container_width=True, hide_index=True)
 
 # ════════════════════════════════════════════════════════
 # 自動洞察
