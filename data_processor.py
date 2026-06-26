@@ -271,7 +271,8 @@ def _homeport_ship(name: str) -> str:
     for keywords, ship in _HOMEPORT_FLEET:
         if any(kw in n for kw in keywords):
             return ship + suffix
-    return _cruise_ship(name)
+    # 非母港船隊、但從台灣登船的航次（如挪威太陽號）→ 標示（台灣登船）
+    return _cruise_ship(name) + "（台灣登船）"
 
 
 _SHIP_RE = re.compile(r"([一-鿿A-Za-z]+號)")
