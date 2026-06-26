@@ -204,11 +204,18 @@ df_prev = dp.filter_df(
 )
 
 # ── KPI helper ───────────────────────────────────────────
+def _fmt_money(v: float) -> str:
+    """金額顯示：達到「億」時用億為單位（避免 st.metric 過長被截斷），否則完整。"""
+    if abs(v) >= 1e8:
+        return f"NT${v / 1e8:,.2f} 億"
+    return f"NT${v:,.0f}"
+
+
 def kpi(col, label: str, current: float, prev: float, fmt: str = "money"):
     """st.metric with delta vs previous period."""
     if fmt == "money":
-        val_str  = f"NT${current:,.0f}"
-        prev_str = f"NT${prev:,.0f}"
+        val_str  = _fmt_money(current)
+        prev_str = _fmt_money(prev)
     elif fmt == "count":
         val_str  = f"{int(current):,}"
         prev_str = f"{int(prev):,}"
