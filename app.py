@@ -205,9 +205,12 @@ df_prev = dp.filter_df(
 
 # ── KPI helper ───────────────────────────────────────────
 def _fmt_money(v: float) -> str:
-    """金額顯示：達到「億」時用億為單位（避免 st.metric 過長被截斷），否則完整。"""
-    if abs(v) >= 1e8:
-        return f"NT${v / 1e8:,.2f} 億"
+    """金額顯示：億級用英文縮寫（M/B）避免 st.metric 過長被截斷，較小金額維持完整。"""
+    a = abs(v)
+    if a >= 1e9:
+        return f"NT${v / 1e9:,.2f}B"
+    if a >= 1e8:
+        return f"NT${v / 1e6:,.0f}M"
     return f"NT${v:,.0f}"
 
 
