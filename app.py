@@ -1235,16 +1235,23 @@ elif page == "📶 WAU":
             ga4w["週"] = ga4w["週起始日"].dt.strftime("%Y-%m-%d")
             ga4w = ga4w.sort_values("週起始日")
 
+            # 依區間內 WAU 總量排序，並建立「管道→顏色」對應（兩處共用、顏色一致）
+            chan_order = (ga4w.groupby("管道")["使用者"].sum()
+                              .sort_values(ascending=False).index.tolist())
+            _palette = px.colors.qualitative.Plotly
+            color_map = {ch: _palette[i % len(_palette)] for i, ch in enumerate(chan_order)}
+
             # ① 全管道同圖：看彼此相對數量
             st.markdown("**全管道（看相對數量）**")
             fig_all = px.line(ga4w, x="週", y="使用者", color="管道", markers=True,
-                              category_orders={"管道": dp.CHANNEL_BUCKETS})
+                              category_orders={"管道": chan_order},
+                              color_discrete_map=color_map)
             fig_all.update_xaxes(type="category")
             st.plotly_chart(fig_all, use_container_width=True)
 
-            # ② 各管道分開看（一排一格，各自刻度，標題附 vs 前一完整週）
+            # ② 各管道分開看（一排一格，各自刻度，依量排序，標題附 vs 前一完整週）
             st.markdown("**各管道分開看（各自趨勢，vs 前一完整週）**")
-            for ch in dp.CHANNEL_BUCKETS:
+            for ch in chan_order:
                 sub = ga4w[ga4w["管道"] == ch].sort_values("週起始日")
                 if sub.empty:
                     continue
@@ -1259,6 +1266,7 @@ elif page == "📶 WAU":
                     head = ch
                 st.markdown(f"**{head}**")
                 figx = px.line(sub, x="週", y="使用者", markers=True)
+                figx.update_traces(line_color=color_map[ch])
                 figx.update_xaxes(type="category", title=None)
                 figx.update_layout(height=240, margin=dict(l=0, r=0, t=10, b=0))
                 st.plotly_chart(figx, use_container_width=True)
