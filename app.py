@@ -1172,60 +1172,65 @@ elif page == "🔍 訂單查詢":
 # WAU
 # ════════════════════════════════════════════════════════
 elif page == "📶 WAU":
-    st.caption("GA4 全站每週活躍使用者（WAU）與每週訂單數對照。"
+    st.caption("GA4 各管道流量 vs 訂單（依管道桶比對）。"
                "此頁**不受側邊欄篩選影響**，使用下方獨立區間。")
     win = st.selectbox("顯示區間", ["近12週", "近26週", "近52週", "全部"], index=0)
 
-    wau = dp.load_wau()
-    if wau.empty:
-        st.info("目前讀不到 GA4 WAU 資料（請確認來源試算表可存取）。")
+    ga4 = dp.load_ga4_channel()
+    if ga4.empty:
+        st.info("目前讀不到 GA4 管道資料（請確認來源試算表可存取）。")
     else:
+        weeks = sorted(ga4["週起始日"].unique())
+        _n = {"近12週": 12, "近26週": 26, "近52週": 52}.get(win)
+        keep = weeks[-_n:] if _n else weeks
+        ga4w = ga4[ga4["週起始日"].isin(keep)]
+        st.caption(f"統計區間：{pd.Timestamp(keep[0]).strftime('%Y-%m-%d')} ～ "
+                   f"{pd.Timestamp(keep[-1]).strftime('%Y-%m-%d')}（{len(keep)} 週）")
+
+        # 訂單依管道桶
         _o = df_all.copy()
+        _o["管道"] = _o["affiliate_id"].apply(dp._order_channel)
+        _o = _o[_o["管道"].notna()]
         _o["週起始日"] = (_o["order_date"]
                         - pd.to_timedelta((_o["order_date"].dt.dayofweek + 1) % 7, unit="D")
                         ).dt.normalize()
-        ow = _o.groupby("週起始日")["order_id"].count().reset_index(name="訂單數")
-        wk = wau.merge(ow, on="週起始日", how="left").fillna({"訂單數": 0})
-        wk["訂單數"] = wk["訂單數"].astype(int)
-        wk = wk.sort_values("週起始日")
-        _n = {"近12週": 12, "近26週": 26, "近52週": 52}.get(win)
-        if _n:
-            wk = wk.tail(_n)
-        wk["轉換率%"] = (wk["訂單數"] / wk["WAU"] * 100).round(2)
-        wk["週"] = wk["週起始日"].dt.strftime("%Y-%m-%d")
+        ow = _o[_o["週起始日"].isin(keep)]
 
-        # 最新一週 KPI
-        last = wk.iloc[-1]
-        k1, k2, k3 = st.columns(3)
-        k1.metric(f"最新週 WAU（{last['週']}）", f"{int(last['WAU']):,}")
-        k2.metric("最新週訂單數", f"{int(last['訂單數']):,}")
-        k3.metric("最新週轉換率", f"{last['轉換率%']:.2f}%")
+        gu = ga4w.groupby("管道")["使用者"].sum()
+        oo = ow.groupby("管道")["order_id"].count()
+        tbl = pd.DataFrame({"管道": dp.CHANNEL_BUCKETS})
+        tbl["GA4使用者"] = tbl["管道"].map(gu).fillna(0).astype(int)
+        tbl["訂單數"] = tbl["管道"].map(oo).fillna(0).astype(int)
+        tbl["轉換率%"] = tbl.apply(
+            lambda r: round(r["訂單數"] / r["GA4使用者"] * 100, 2) if r["GA4使用者"] > 0 else 0.0,
+            axis=1)
 
-        mc1, mc2 = st.columns([3, 2])
-        with mc1:
-            fig_w = make_subplots(specs=[[{"secondary_y": True}]])
-            fig_w.add_trace(go.Bar(x=wk["週"], y=wk["訂單數"], name="訂單數",
-                                   marker_color="#1f77b4"), secondary_y=False)
-            fig_w.add_trace(go.Scatter(x=wk["週"], y=wk["WAU"], name="WAU",
-                                       mode="lines+markers", line=dict(color="#ff7f0e")),
-                            secondary_y=True)
-            fig_w.update_xaxes(type="category")
-            fig_w.update_yaxes(title_text="訂單數", secondary_y=False)
-            fig_w.update_yaxes(title_text="WAU", secondary_y=True)
-            fig_w.update_layout(title="每週 WAU vs 訂單數", height=400,
-                                legend=dict(orientation="h", yanchor="bottom",
-                                            y=1.02, xanchor="right", x=1))
-            st.plotly_chart(fig_w, use_container_width=True)
-        with mc2:
-            fig_cr = px.line(wk, x="週", y="轉換率%", markers=True,
-                             title="全站轉換率（訂單數 ÷ WAU）")
-            fig_cr.update_xaxes(type="category")
-            st.plotly_chart(fig_cr, use_container_width=True)
+        st.subheader("各管道：GA4 使用者 vs 訂單 vs 轉換率")
+        st.dataframe(
+            tbl.style.format({"GA4使用者": "{:,}", "訂單數": "{:,}", "轉換率%": "{:.2f}%"}),
+            use_container_width=True, hide_index=True)
+        st.caption("⚠️「直接/未知」與「自然搜尋」含大量未標記訂單，轉換率僅供參考；"
+                   "付費廣告／社群LINE／推薦聯盟／CRM 因標籤明確較可信。")
 
-        st.caption("WAU 為 GA4 全站每週活躍使用者；轉換率＝該週訂單數 ÷ WAU。"
-                   "訂單數為全站全產品線（不分篩選）；最新一週可能未完整。")
-        tbl = wk[["週", "WAU", "訂單數", "轉換率%"]].iloc[::-1].reset_index(drop=True)
-        st.dataframe(tbl, use_container_width=True, hide_index=True)
+        # 流量結構 vs 訂單結構（堆疊面積）
+        ga4w2 = ga4w.copy()
+        ga4w2["週"] = ga4w2["週起始日"].dt.strftime("%Y-%m-%d")
+        ow2 = (ow.groupby(["週起始日", "管道"])["order_id"].count()
+                 .reset_index(name="訂單數"))
+        ow2["週"] = ow2["週起始日"].dt.strftime("%Y-%m-%d")
+        ac1, ac2 = st.columns(2)
+        with ac1:
+            fig_u = px.area(ga4w2.sort_values("週起始日"), x="週", y="使用者", color="管道",
+                            title="GA4 各管道使用者趨勢",
+                            category_orders={"管道": dp.CHANNEL_BUCKETS})
+            fig_u.update_xaxes(type="category")
+            st.plotly_chart(fig_u, use_container_width=True)
+        with ac2:
+            fig_o = px.area(ow2.sort_values("週起始日"), x="週", y="訂單數", color="管道",
+                            title="各管道訂單趨勢",
+                            category_orders={"管道": dp.CHANNEL_BUCKETS})
+            fig_o.update_xaxes(type="category")
+            st.plotly_chart(fig_o, use_container_width=True)
 
 # ════════════════════════════════════════════════════════
 # 自動洞察
