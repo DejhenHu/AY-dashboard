@@ -1224,7 +1224,7 @@ elif page == "📶 WAU":
                    "KPI 以「最新完整週」相比；本週為進行中。"
                    "「本週預估」＝本週累計 ÷ 已過天數 × 7（線性外推；因不重複使用者會遞減累積，實際通常略低於此）。")
 
-        # 各管道 WAU 趨勢（上下排列，與上方每週趨勢同寬便於對比；直接/未知單獨一張）
+        # 各管道 WAU 趨勢
         st.subheader("各管道 WAU 趨勢")
         ga4 = dp.load_ga4_channel()
         if ga4.empty:
@@ -1233,21 +1233,25 @@ elif page == "📶 WAU":
             keep = set(wau["週起始日"])  # 與上方相同區間
             ga4w = ga4[ga4["週起始日"].isin(keep)].copy()
             ga4w["週"] = ga4w["週起始日"].dt.strftime("%Y-%m-%d")
-            others = ga4w[ga4w["管道"] != "直接/未知"]
-            direct = ga4w[ga4w["管道"] == "直接/未知"]
+            ga4w = ga4w.sort_values("週起始日")
 
-            fig_c = px.line(others.sort_values("週起始日"), x="週", y="使用者",
-                            color="管道", markers=True, title="各管道（不含直接/未知）",
-                            category_orders={"管道": [c for c in dp.CHANNEL_BUCKETS
-                                                     if c != "直接/未知"]})
-            fig_c.update_xaxes(type="category")
-            st.plotly_chart(fig_c, use_container_width=True)
+            # ① 全管道同圖：看彼此相對數量
+            st.markdown("**全管道（看相對數量）**")
+            fig_all = px.line(ga4w, x="週", y="使用者", color="管道", markers=True,
+                              category_orders={"管道": dp.CHANNEL_BUCKETS})
+            fig_all.update_xaxes(type="category")
+            st.plotly_chart(fig_all, use_container_width=True)
 
-            fig_d = px.line(direct.sort_values("週起始日"), x="週", y="使用者",
-                            markers=True, title="直接/未知")
-            fig_d.update_xaxes(type="category")
-            fig_d.update_traces(line_color="#999")
-            st.plotly_chart(fig_d, use_container_width=True)
+            # ② 小倍數：每管道一格、各自 Y 軸刻度，看自己的起伏
+            st.markdown("**各管道分開看（各自刻度，比自己的趨勢）**")
+            fig_f = px.line(ga4w, x="週", y="使用者", facet_col="管道",
+                            facet_col_wrap=2, markers=True,
+                            category_orders={"管道": dp.CHANNEL_BUCKETS})
+            fig_f.update_yaxes(matches=None)  # 各格獨立 Y 軸
+            fig_f.update_xaxes(type="category")
+            fig_f.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+            fig_f.update_layout(showlegend=False, height=620)
+            st.plotly_chart(fig_f, use_container_width=True)
 
 # ════════════════════════════════════════════════════════
 # 自動洞察
