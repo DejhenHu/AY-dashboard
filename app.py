@@ -158,6 +158,18 @@ with st.sidebar:
     except (KeyError, ValueError):
         pass
 
+    # 夾在資料範圍內（避免「本週」起始日超出最大日期等情況讓 date_input 報錯）
+    def _clamp(d):
+        return max(min_date, min(d, max_date))
+
+    default_start = _clamp(default_start)
+    default_end   = _clamp(default_end)
+    if default_start > default_end:
+        default_start = default_end
+    for _k in ("date_start", "date_end"):
+        if isinstance(st.session_state.get(_k), date):
+            st.session_state[_k] = _clamp(st.session_state[_k])
+
     def _on_date_change():
         st.query_params["start"]  = str(st.session_state.date_start)
         st.query_params["end"]    = str(st.session_state.date_end)
