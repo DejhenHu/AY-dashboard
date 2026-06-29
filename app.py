@@ -91,6 +91,8 @@ with st.sidebar:
     days_since_sunday = (today.weekday() + 1) % 7
     this_week_sun = today - timedelta(days=days_since_sunday)
     last_week_sun = this_week_sun - timedelta(days=7)
+    # 日期輸入上限放寬到今天（資料可能落後於當前日期，本週才顯示得出來）
+    _max_input = max(max_date, today)
 
     _PRESET_OPTS = ["自訂", "昨天", "本週", "前一週", "近7天", "近30天", "近90天"]
     _preset_url  = st.query_params.get("preset", "本週")
@@ -106,7 +108,7 @@ with st.sidebar:
         if p == "昨天":
             ns, ne = today - timedelta(days=1), today - timedelta(days=1)
         elif p == "本週":
-            ns, ne = this_week_sun, min(this_week_sun + timedelta(days=6), max_date)
+            ns, ne = this_week_sun, min(this_week_sun + timedelta(days=6), today)
         elif p == "前一週":
             ns, ne = last_week_sun, this_week_sun - timedelta(days=1)
         elif p == "近7天":
@@ -131,7 +133,7 @@ with st.sidebar:
         default_end = today - timedelta(days=1)
     elif preset == "本週":
         default_start = this_week_sun
-        default_end = min(this_week_sun + timedelta(days=6), max_date)
+        default_end = min(this_week_sun + timedelta(days=6), today)
     elif preset == "前一週":
         default_start = last_week_sun
         default_end = this_week_sun - timedelta(days=1)
@@ -158,9 +160,9 @@ with st.sidebar:
     except (KeyError, ValueError):
         pass
 
-    # 夾在資料範圍內（避免「本週」起始日超出最大日期等情況讓 date_input 報錯）
+    # 夾在 [最小日, 今天]（允許本週即使資料未進來也能選；避免 date_input 報錯）
     def _clamp(d):
-        return max(min_date, min(d, max_date))
+        return max(min_date, min(d, _max_input))
 
     default_start = _clamp(default_start)
     default_end   = _clamp(default_end)
@@ -176,10 +178,10 @@ with st.sidebar:
         st.query_params["preset"] = "自訂"
 
     start_date = st.date_input("下單日期（起）", value=default_start,
-                               min_value=min_date, max_value=max_date,
+                               min_value=min_date, max_value=_max_input,
                                key="date_start", on_change=_on_date_change)
     end_date   = st.date_input("下單日期（迄）", value=default_end,
-                               min_value=min_date, max_value=max_date,
+                               min_value=min_date, max_value=_max_input,
                                key="date_end", on_change=_on_date_change)
 
     # 前期區間：週期型 preset 比「上一週同期」（往前 7 天），其餘往前推相同天數
