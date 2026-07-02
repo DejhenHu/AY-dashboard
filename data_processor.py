@@ -12,15 +12,15 @@ SHEET_CSV_URL = (
 # GA4 每週活躍使用者(WAU)：A 欄 yearWeek(YYYYWW)、B 欄 activeUsers
 WAU_CSV_URL = (
     "https://docs.google.com/spreadsheets/d/"
-    "1fML4MGM1WJZmYA_KGdXJ0qc7il2Py_Kn7JZwzzAezzQ"
-    "/gviz/tq?tqx=out:csv&gid=1079446904"
+    "1DUjbMhGk0ElpYZwqv2b7_5h_UGtZBYSfhg2tMN34SEU"
+    "/gviz/tq?tqx=out:csv&gid=1711406010"
 )
 
 # GA4 每週各管道使用者：A 欄 yearWeek、B 欄 sessionDefaultChannelGroup、C 欄 activeUsers
 GA4_CHANNEL_CSV_URL = (
     "https://docs.google.com/spreadsheets/d/"
-    "1fML4MGM1WJZmYA_KGdXJ0qc7il2Py_Kn7JZwzzAezzQ"
-    "/gviz/tq?tqx=out:csv&gid=536190960"
+    "1TRKBgqEzGyODbkDrZXTQX2JaC4oQN3YNQn_V_2_yIOQ"
+    "/gviz/tq?tqx=out:csv&gid=199567350"
 )
 
 # 管道桶顯示順序
