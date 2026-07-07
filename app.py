@@ -516,10 +516,17 @@ if page == "📊 總覽":
         st.plotly_chart(fig2, use_container_width=True)
 
     trend = dp.revenue_trend(df, freq=trend_freq)
-    _xfmt = "%Y-%m" if trend_freq == "M" else "%Y-%m-%d"
-    trend["日期"] = trend["日期"].dt.strftime(_xfmt)
+    show_holidays = st.checkbox("在趨勢圖標記台灣連假", value=True)
     fig3 = px.line(trend, x="日期", y="營收", title="營收趨勢", markers=True)
-    fig3.update_xaxes(type="category")  # 純日期、不顯示時間刻度
+    fig3.update_xaxes(tickformat="%Y-%m" if trend_freq == "M" else "%Y-%m-%d")
+    if show_holidays:
+        for _hs, _he, _hn in dp.taiwan_holidays(start_date, end_date):
+            fig3.add_vrect(
+                x0=pd.Timestamp(_hs) - pd.Timedelta(hours=12),
+                x1=pd.Timestamp(_he) + pd.Timedelta(hours=12),
+                fillcolor="#ff5a5a", opacity=0.12, line_width=0,
+                annotation_text=_hn, annotation_position="top left",
+                annotation_font_size=10)
     st.plotly_chart(fig3, use_container_width=True)
 
     # ── GMV K 線圖 ───────────────────────────────────────────

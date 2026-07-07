@@ -126,6 +126,30 @@ def load_ga4_channel() -> pd.DataFrame:
     return d.groupby(["週起始日", "管道"])["使用者"].sum().reset_index()
 
 
+@st.cache_data(ttl=86400)
+def taiwan_holidays(start, end):
+    """回傳區間內台灣連假區塊：[(起, 迄, 名稱)]；相鄰假日(含補假/週末)合併成一段。"""
+    try:
+        import holidays
+    except Exception:
+        return []
+    tw = holidays.Taiwan(years=range(start.year, end.year + 1))
+    days = sorted(d for d in tw if start <= d <= end)
+    clusters = []
+    for d in days:
+        nm = tw[d].split("（")[0]  # 去掉「（補假）」
+        if clusters and (d - clusters[-1]["end"]).days <= 3:  # 跨週末合併成連假
+            clusters[-1]["end"] = d
+            clusters[-1]["names"].append(nm)
+        else:
+            clusters.append({"start": d, "end": d, "names": [nm]})
+    out = []
+    for c in clusters:
+        label = max(set(c["names"]), key=c["names"].count)  # 取最常出現的名稱
+        out.append((c["start"], c["end"], label))
+    return out
+
+
 def _clean(df: pd.DataFrame) -> pd.DataFrame:
     df["order_date"] = pd.to_datetime(df["order_date"], errors="coerce")
     df["check_in"]   = pd.to_datetime(df["check_in"],   errors="coerce")
