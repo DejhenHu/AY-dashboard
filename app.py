@@ -518,7 +518,8 @@ if page == "📊 總覽":
     trend = dp.revenue_trend(df, freq=trend_freq)
     show_holidays = st.checkbox("在趨勢圖標記台灣連假", value=True)
     fig3 = px.line(trend, x="日期", y="營收", title="營收趨勢", markers=True)
-    fig3.update_xaxes(tickformat="%Y-%m" if trend_freq == "M" else "%Y-%m-%d")
+    fig3.update_xaxes(tickformat="%Y-%m" if trend_freq == "M" else "%Y-%m-%d",
+                      tickmode="array", tickvals=trend["日期"])  # 刻度只落在資料日期，不重複
     if show_holidays:
         for _hs, _he, _hn in dp.taiwan_holidays(start_date, end_date):
             fig3.add_vrect(
