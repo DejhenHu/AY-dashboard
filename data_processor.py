@@ -169,6 +169,12 @@ def _clean(df: pd.DataFrame) -> pd.DataFrame:
     # 移除公式填充的空白列
     df = df[df["order_id"].notna() & (df["order_id"].astype(str).str.strip() != "")].copy()
 
+    # 清掉商品名的 <translate=NN>...</translate> 標記
+    df["bnb_name"] = (df["bnb_name"].astype(str)
+                      .str.replace(r"</?translate[^>]*>", "", regex=True)
+                      .str.replace(r"\s+", " ", regex=True)
+                      .str.strip())
+
     # 排除「補款專用」「更名手續費」等非真實航次/訂單項目，不計入任何頁面統計
     df = df[~df["bnb_name"].astype(str).str.contains("補款|更名手續費", na=False)].copy()
 
