@@ -91,8 +91,8 @@ with st.sidebar:
     days_since_sunday = (today.weekday() + 1) % 7
     this_week_sun = today - timedelta(days=days_since_sunday)
     last_week_sun = this_week_sun - timedelta(days=7)
-    # 日期輸入上限放寬到今天（資料可能落後於當前日期，本週才顯示得出來）
-    _max_input = max(max_date, today)
+    # 日期上限＝資料最新日（本週迄日跟著資料，不超出無資料的日期）
+    _max_input = max_date
 
     _PRESET_OPTS = ["自訂", "昨天", "本週", "前一週", "近7天", "近30天", "近90天"]
     _preset_url  = st.query_params.get("preset", "本週")
@@ -108,7 +108,7 @@ with st.sidebar:
         if p == "昨天":
             ns, ne = today - timedelta(days=1), today - timedelta(days=1)
         elif p == "本週":
-            ns, ne = this_week_sun, min(this_week_sun + timedelta(days=6), today)
+            ns, ne = this_week_sun, min(this_week_sun + timedelta(days=6), max_date)
         elif p == "前一週":
             ns, ne = last_week_sun, this_week_sun - timedelta(days=1)
         elif p == "近7天":
@@ -133,7 +133,7 @@ with st.sidebar:
         default_end = today - timedelta(days=1)
     elif preset == "本週":
         default_start = this_week_sun
-        default_end = min(this_week_sun + timedelta(days=6), today)
+        default_end = min(this_week_sun + timedelta(days=6), max_date)
     elif preset == "前一週":
         default_start = last_week_sun
         default_end = this_week_sun - timedelta(days=1)
