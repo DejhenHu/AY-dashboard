@@ -194,6 +194,9 @@ with st.sidebar:
         _prev_start = _prev_end  - timedelta(days=_n - 1)
     st.caption(f"比較前期：{_prev_start.strftime('%m/%d')} ～ "
                f"{_prev_end.strftime('%m/%d')}（共 {_n} 天）")
+    st.caption(f"📅 訂單資料最新至 {max_date.strftime('%Y-%m-%d')}"
+               + ("（所選迄日已超過資料範圍，最後幾天尚無資料）"
+                  if end_date > max_date else ""))
 
     all_statuses = sorted(df_all["booking_status"].dropna().unique().tolist())
     selected_statuses = st.multiselect("訂單狀態", options=all_statuses, default=all_statuses)
