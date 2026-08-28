@@ -425,13 +425,21 @@ def render_seb_overview(sub: pd.DataFrame):
     y_col = "營收" if metric == "營收" else "訂單數"
     order = (g.groupby("seb_type", observed=False)[y_col].sum()
                .sort_values(ascending=False).index.tolist())
-    fig = px.bar(g, x="seb_type", y=y_col, color="seb_country",
+    # 區段內直接標「國家＋數字」，不必再對照圖例
+    if metric == "營收":
+        g["_label"] = g["seb_country"].astype(str) + "<br>" + g["營收"].apply(_fmt_money)
+    else:
+        g["_label"] = g["seb_country"].astype(str) + "<br>" + g["訂單數"].apply(lambda v: f"{int(v):,}筆")
+    fig = px.bar(g, x="seb_type", y=y_col, color="seb_country", text="_label",
                  category_orders={"seb_type": order, "seb_country": dp.SEB_COUNTRIES},
                  color_discrete_map=_SEB_COUNTRY_COLORS,
                  title=f"SEB 各類別 × 國家（{metric}）",
                  labels={"seb_type": "", "seb_country": "國家"})
     fig.update_layout(height=440, barmode="stack",
-                      legend=dict(orientation="h", y=-0.15))
+                      legend=dict(orientation="h", y=-0.15),
+                      uniformtext_minsize=9, uniformtext_mode="hide")
+    fig.update_traces(textposition="inside", insidetextanchor="middle",
+                      textfont=dict(color="white", size=12), textangle=0)
     if metric == "營收":
         fig.update_traces(hovertemplate="%{x}<br>%{fullData.name}：NT$%{y:,.0f}<extra></extra>")
     else:
