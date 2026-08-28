@@ -465,8 +465,36 @@ def render_seb_overview(sub: pd.DataFrame):
     total_row["合計"] = f"{_fmt_money(rev_p.values.sum())} / {int(ord_p.values.sum())}筆"
     pivot.loc["合計"] = total_row
     pivot.index.name = "類別＼國家"
-    st.dataframe(pivot.fillna("－"), use_container_width=True)
-    st.caption("每格格式：營收 / 訂單數（本期）")
+    pivot = pivot.fillna("－")
+
+    # 依營收標深淺（僅 body 格參與；合計列/欄維持中性，避免大數壓扁色階）
+    body_max = rev_p.values.max() if rev_p.values.max() > 0 else 1
+
+    def _shade(_data):
+        css = pd.DataFrame("", index=pivot.index, columns=pivot.columns)
+        for t in dp.SEB_TYPES:
+            for c in dp.SEB_COUNTRIES:
+                v = rev_p.loc[t, c]
+                if v <= 0:
+                    continue
+                # 平方根色階：單一大格不會把其餘壓成白色，中間值也看得出深淺
+                ratio = (v / body_max) ** 0.5             # 0~1
+                # 白→品牌藍(#1f77b4) 內插，越高越深
+                r = int(255 + (31 - 255) * ratio)
+                gc = int(255 + (119 - 255) * ratio)
+                b = int(255 + (180 - 255) * ratio)
+                fg = "white" if ratio > 0.6 else "#111"   # 深底改白字
+                css.loc[t, c] = f"background-color: rgb({r},{gc},{b}); color: {fg}"
+        return css
+
+    styled = (pivot.style
+                   .apply(_shade, axis=None)
+                   .set_properties(subset=pd.IndexSlice[["合計"], :],
+                                   **{"font-weight": "bold"})
+                   .set_properties(subset=pd.IndexSlice[:, ["合計"]],
+                                   **{"font-weight": "bold"}))
+    st.dataframe(styled, use_container_width=True)
+    st.caption("每格格式：營收 / 訂單數（本期）；底色深淺＝營收高低（合計不著色）")
 
 
 def render_cruise_rank(sub: pd.DataFrame, sub_prev: pd.DataFrame,
