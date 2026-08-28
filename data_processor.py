@@ -59,6 +59,28 @@ _TAIWAN_FLEET_SHIPS = ("探索星號", "榮耀號", "莎倫娜號", "海洋富�
 
 DAY_TOUR_TYPES = {"Attraction Tickets", "Land tour", "Tours & Experiences", "Transportation"}
 
+# ── SEB 運動賽事分類 ──────────────────────────────────
+# bnb_type=="ski" 及 "Sport Activities" 都屬 SEB；後者混雜多種運動，靠名稱關鍵字拆。
+# 依「命中即停」的優先序判斷（觀賽、鐵人、滑雪要排在馬拉松之前，
+# 才不會把「富士山馬拉松」誤判成登山、把「Challenge Taiwan」誤判成馬拉松）。
+SEB_TYPES = ["🏃 馬拉松", "🏊 鐵人三項", "⛷️ 滑雪", "🎽 其他", "⚾ 觀賽"]
+_SEB_SPECTATE_RE = re.compile(r"棒球|觀賽|WBC|經典賽|看球")
+_SEB_TRI_RE      = re.compile(r"鐵人|三項|triathlon|\bTRI\b|Challenge|LAVA", re.I)
+_SEB_SKI_RE      = re.compile(r"滑雪|ski", re.I)
+_SEB_MARATHON_RE = re.compile(r"馬拉松|路跑|半程馬|超馬|越野馬|公路賽|marathon|\bRUN\b|\bRace\b", re.I)
+
+# ── SEB 國家：以 column_switch_3 為主，無效值時用名稱地名補判 ──
+SEB_COUNTRIES = ["日本", "台灣", "韓國", "其他海外"]
+_SEB_CS3_MAP = {"japan": "日本", "korea": "韓國", "taiwan": "台灣"}
+_SEB_CS3_INVALID = {"", "-", "nan", "基本方案"}
+_SEB_JP_RE = re.compile(
+    r"日本|東京|大阪|京都|名古屋|北海道|函館|札幌|福岡|沖繩|神戶|橫濱|奈良|新潟|金澤|"
+    r"仙台|盛岡|山形|德島|豐橋|洞爺湖|富士山|富士|山中湖|河口湖|長井|岩手|山寺|藏王")
+_SEB_KR_RE = re.compile(r"韓國|首爾|濟州|大邱|釜山|慶州|Seoul|JTBC", re.I)
+_SEB_TW_RE = re.compile(
+    r"台灣|臺灣|台北|臺北|台中|臺中|台東|臺東|高雄|宜蘭|澎湖|日月潭|陽明山|合歡|清境|"
+    r"田中|雲林|高美濕地|棲蘭|菊島|Challenge Taiwan")
+
 # 實際欄位名稱（從 Google Sheet 第一列讀到的）→ 程式內部名稱
 COLUMN_RENAME = {
     "booking status": "booking_status",
@@ -182,6 +204,8 @@ def _clean(df: pd.DataFrame) -> pd.DataFrame:
     df["bnb_name_lower"] = df["bnb_name"].astype(str).str.lower()
     df["product_line"]   = df.apply(_classify, axis=1)
     df["cruise_type"]    = df.apply(_cruise_type, axis=1)
+    df["seb_type"]       = df.apply(_seb_type, axis=1)
+    df["seb_country"]    = df.apply(_seb_country, axis=1)
     return df
 
 
@@ -235,6 +259,45 @@ def _cruise_type(row) -> str:
     if any(s in name for s in _TAIWAN_FLEET_SHIPS):
         return "母港出發"
     return "飛航郵輪"
+
+
+def _seb_type(row) -> str:
+    """SEB 運動賽事分類。補款/尾款等非真實訂單已在 _clean 全域排除，此處不再處理。"""
+    if row.get("product_line") != "SEB":
+        return ""
+    name = str(row.get("bnb_name", ""))
+    bt   = str(row.get("bnb_type", ""))
+    # 命中即停，順序不可調換
+    if _SEB_SPECTATE_RE.search(name):
+        return "⚾ 觀賽"
+    if _SEB_TRI_RE.search(name):
+        return "🏊 鐵人三項"
+    if bt == "ski" or _SEB_SKI_RE.search(name):
+        return "⛷️ 滑雪"
+    if _SEB_MARATHON_RE.search(name):
+        return "🏃 馬拉松"
+    return "🎽 其他"
+
+
+def _seb_country(row) -> str:
+    """SEB 國家：以 column_switch_3 為主，無效值時用商品名地名補判。"""
+    if row.get("product_line") != "SEB":
+        return ""
+    cs3 = str(row.get("column_switch_3", "")).strip().lower()
+    if cs3 in _SEB_CS3_MAP:
+        return _SEB_CS3_MAP[cs3]
+    if cs3 not in _SEB_CS3_INVALID:
+        # 其他有效值（如 Australia）一律歸其他海外
+        return "其他海外"
+    # cs3 無效 → 用名稱補判（先台/韓，日本關鍵字最多放最後避免誤傷）
+    name = str(row.get("bnb_name", ""))
+    if _SEB_TW_RE.search(name):
+        return "台灣"
+    if _SEB_KR_RE.search(name):
+        return "韓國"
+    if _SEB_JP_RE.search(name):
+        return "日本"
+    return "其他海外"
 
 
 DIRECT_LABEL = "直接/未知"

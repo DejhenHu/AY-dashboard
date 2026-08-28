@@ -399,6 +399,68 @@ def render_rank_tables(sub: pd.DataFrame, sub_prev: pd.DataFrame,
     )
 
 
+# SEB 國家固定色盤（各圖表顏色一致）
+_SEB_COUNTRY_COLORS = {
+    "日本": "#1f77b4", "台灣": "#2ca02c", "韓國": "#ff7f0e", "其他海外": "#8c8c8c",
+}
+
+
+def render_seb_overview(sub: pd.DataFrame):
+    """SEB 總覽：類別×國家 堆疊長條（可切換營收/訂單數）+ 交叉表（本期簡版）。"""
+    if sub.empty:
+        return
+    sub = sub.copy()
+    # 固定類別/國家順序（未出現的也補 0，圖表與表格順序一致）
+    sub["seb_type"] = pd.Categorical(sub["seb_type"], categories=dp.SEB_TYPES, ordered=True)
+    sub["seb_country"] = pd.Categorical(sub["seb_country"], categories=dp.SEB_COUNTRIES, ordered=True)
+
+    metric = st.radio("堆疊長條指標", ["營收", "訂單數"], horizontal=True, key="seb_metric")
+    val_col, agg = ("twd_amount", "sum") if metric == "營收" else ("order_id", "count")
+
+    g = (sub.groupby(["seb_type", "seb_country"], observed=False)
+            .agg(營收=("twd_amount", "sum"), 訂單數=("order_id", "count"))
+            .reset_index())
+
+    # ── 堆疊長條 ───────────────────────────────────────
+    y_col = "營收" if metric == "營收" else "訂單數"
+    order = (g.groupby("seb_type", observed=False)[y_col].sum()
+               .sort_values(ascending=False).index.tolist())
+    fig = px.bar(g, x="seb_type", y=y_col, color="seb_country",
+                 category_orders={"seb_type": order, "seb_country": dp.SEB_COUNTRIES},
+                 color_discrete_map=_SEB_COUNTRY_COLORS,
+                 title=f"SEB 各類別 × 國家（{metric}）",
+                 labels={"seb_type": "", "seb_country": "國家"})
+    fig.update_layout(height=440, barmode="stack",
+                      legend=dict(orientation="h", y=-0.15))
+    if metric == "營收":
+        fig.update_traces(hovertemplate="%{x}<br>%{fullData.name}：NT$%{y:,.0f}<extra></extra>")
+    else:
+        fig.update_traces(hovertemplate="%{x}<br>%{fullData.name}：%{y:,} 筆<extra></extra>")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ── 交叉表（本期簡版：每格「營收 / 訂單數」，含合計）────────
+    st.subheader("類別 × 國家 交叉表")
+    g["格"] = g.apply(lambda r: f"{_fmt_money(r['營收'])} / {int(r['訂單數'])}筆", axis=1)
+    pivot = g.pivot(index="seb_type", columns="seb_country", values="格")
+    pivot = pivot.reindex(index=dp.SEB_TYPES, columns=dp.SEB_COUNTRIES)
+
+    # 合計欄（各類別橫向加總）
+    rev_p = g.pivot(index="seb_type", columns="seb_country", values="營收").reindex(
+        index=dp.SEB_TYPES, columns=dp.SEB_COUNTRIES).fillna(0)
+    ord_p = g.pivot(index="seb_type", columns="seb_country", values="訂單數").reindex(
+        index=dp.SEB_TYPES, columns=dp.SEB_COUNTRIES).fillna(0)
+    pivot["合計"] = [f"{_fmt_money(r)} / {int(o)}筆"
+                    for r, o in zip(rev_p.sum(axis=1), ord_p.sum(axis=1))]
+    # 合計列（各國家縱向加總）
+    total_row = {c: f"{_fmt_money(rev_p[c].sum())} / {int(ord_p[c].sum())}筆"
+                 for c in dp.SEB_COUNTRIES}
+    total_row["合計"] = f"{_fmt_money(rev_p.values.sum())} / {int(ord_p.values.sum())}筆"
+    pivot.loc["合計"] = total_row
+    pivot.index.name = "類別＼國家"
+    st.dataframe(pivot.fillna("－"), use_container_width=True)
+    st.caption("每格格式：營收 / 訂單數（本期）")
+
+
 def render_cruise_rank(sub: pd.DataFrame, sub_prev: pd.DataFrame,
                        ship_fn, key: str):
     """郵輪航次排行：上方可依「船（號）」篩選，再出訂單數/成長數排行表。"""
@@ -1046,8 +1108,14 @@ elif page == "🏠 住宿 & 露營":
 elif page == "🏃 SEB":
     seb_df   = df[df["product_line"] == "SEB"]
     seb_prev = df_prev[df_prev["product_line"] == "SEB"]
-    render_simple_tab(seb_df, "SEB", prev_df=seb_prev)
-    if not seb_df.empty:
+    if seb_df.empty:
+        st.info("此篩選範圍內無 SEB 訂單。")
+    else:
+        # ── 總覽：類別 × 國家 ──────────────────────────
+        render_seb_overview(seb_df)
+        st.divider()
+        # ── 原有：商品排行 + 出發月份 + 訂單/成長排行 ──
+        render_simple_tab(seb_df, "SEB", prev_df=seb_prev)
         st.divider()
         render_rank_tables(seb_df, seb_prev, with_city=False)
 
