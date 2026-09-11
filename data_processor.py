@@ -91,10 +91,27 @@ COLUMN_RENAME = {
 }
 
 
+class SourceSheetError(Exception):
+    """來源試算表本身壞掉（#REF!／空資料／登入頁）時拋出，訊息可直接顯示給使用者。"""
+
+
 @st.cache_data(ttl=1800)
 def load_data() -> pd.DataFrame:
     df = pd.read_csv(SHEET_CSV_URL, dtype=str)
     df.rename(columns=COLUMN_RENAME, inplace=True)
+
+    # 來源試算表若公式參照斷掉（IMPORTRANGE 授權被收回、來源分頁被刪…），
+    # 整張分頁會變成 #REF!，此時直接給看得懂的訊息，而不是後面報 KeyError:'order_date'。
+    cols = [str(c) for c in df.columns]
+    if any("#REF!" in c for c in cols) or "order_date" not in df.columns or df.empty:
+        raise SourceSheetError(
+            "來源訂單試算表目前無法讀到有效資料"
+            f"（回傳欄位：{cols[:5]}…、共 {len(df)} 筆）。\n\n"
+            "多半是試算表本身的公式參照斷掉（顯示 #REF!），常見原因：\n"
+            "① IMPORTRANGE 授權被收回 → 到訂單分頁點 A1，按「允許存取」重新授權；\n"
+            "② 被參照的來源分頁被刪除／改名／移動 → 修好公式或補回來源。\n"
+            "修復後重整本頁即可，程式端無需改動。"
+        )
     return _clean(df)
 
 

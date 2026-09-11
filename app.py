@@ -36,6 +36,14 @@ st.title("🌏 AsiaYo 業績儀表板")
 with st.spinner("載入資料中..."):
     try:
         df_all = dp.load_data()
+    except dp.SourceSheetError as e:
+        st.error("⚠️ 資料載入失敗：來源試算表沒有有效資料")
+        st.markdown(str(e).replace("\n", "\n\n"))
+        st.link_button(
+            "開啟訂單試算表檢查",
+            "https://docs.google.com/spreadsheets/d/"
+            "1sXj5DPEN9Jmjs_0HBFPeiMaicXaqE_sZ3Jbk3TPajYs/edit#gid=100183531")
+        st.stop()
     except Exception as e:
         st.error(f"資料載入失敗：{e}")
         st.stop()
