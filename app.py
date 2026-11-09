@@ -380,6 +380,65 @@ def render_accom_region(stats: pd.DataFrame, label: str, region_word: str,
         st.plotly_chart(fig_a, use_container_width=True)
 
 
+def render_accom_body(sub: pd.DataFrame, sub_prev: pd.DataFrame, label: str,
+                      tw_names: bool, show_type_dist: bool = False,
+                      show_hoshino: bool = False):
+    """住宿分頁（或子分頁）的通用內容：KPI + 各地區營收/AOV + 入住月份 +（選配）類型分佈/星野 + 排行。"""
+    if sub.empty:
+        st.info(f"此篩選範圍內無{label}訂單。")
+        return
+    c1, c2 = st.columns(2)
+    kpi(c1, f"{label}營收",   sub["twd_amount"].sum(), sub_prev["twd_amount"].sum())
+    kpi(c2, f"{label}訂單數", len(sub), len(sub_prev), fmt="count")
+
+    # 各地區 營收 + AOV（台灣縣市英轉中）
+    geo = sub.copy()
+    if tw_names:
+        geo["bnb_city"] = geo["bnb_city"].map(dp._TW_CITY_ZH).fillna(geo["bnb_city"])
+    stats = _region_stats(geo, "bnb_city")
+    render_accom_region(stats, label, "縣市" if tw_names else "城市")
+
+    # 入住月份
+    ci_df = (sub.assign(check_in_month=sub["check_in"].dt.to_period("M").astype(str))
+                .groupby("check_in_month")
+                .agg(訂單數=("order_id", "count")).reset_index())
+    fig2 = px.bar(ci_df, x="check_in_month", y="訂單數",
+                  title=f"{label} 入住月份分佈", labels={"check_in_month": "入住月份"})
+    fig2.update_xaxes(type="category", categoryorder="category ascending")
+    st.plotly_chart(fig2, use_container_width=True)
+
+    if show_type_dist:
+        st.subheader("住宿類型分佈")
+        type_df = (sub.groupby("bnb_type")
+                      .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
+                      .reset_index().sort_values("營收", ascending=False))
+        tc1, tc2 = st.columns(2)
+        with tc1:
+            fig_t = px.bar(type_df, x="bnb_type", y="訂單數", color="bnb_type",
+                           title="住宿類型（訂單數）", text_auto=True)
+            fig_t.update_layout(showlegend=False)
+            st.plotly_chart(fig_t, use_container_width=True)
+        with tc2:
+            fig_t2 = px.bar(type_df, x="bnb_type", y="營收", color="bnb_type",
+                            title="住宿類型（營收）", text_auto=".2s")
+            fig_t2.update_layout(showlegend=False)
+            st.plotly_chart(fig_t2, use_container_width=True)
+
+    if show_hoshino:
+        st.subheader("星野飯店訂單")
+        hoshino = sub[sub["bnb_name"].str.contains("星野|Hoshino", case=False, na=False)]
+        if not hoshino.empty:
+            h_df = (hoshino.groupby("bnb_name")
+                           .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
+                           .sort_values("營收", ascending=False).reset_index())
+            st.dataframe(h_df, use_container_width=True)
+        else:
+            st.info("目前篩選範圍內無星野飯店訂單。")
+
+    st.divider()
+    render_rank_tables(sub, sub_prev, with_city=True)
+
+
 def render_rank_tables(sub: pd.DataFrame, sub_prev: pd.DataFrame,
                        with_city: bool = True, region_fn=None):
     """商品「訂單數排行」與「成長數排行」前10名表格（與住宿頁一致）。
@@ -1097,92 +1156,39 @@ elif page == "🌍 GIT":
 # 住宿 & 露營
 # ════════════════════════════════════════════════════════
 elif page == "🏠 住宿 & 露營":
-    sub_tabs = st.tabs(["🇹🇼 台灣住宿", "🇰🇷 韓國住宿", "🇯🇵 日本住宿", "⛺ 露營", "🏘️ 包棟"])
-    # mode: "pl"=依 product_line 篩；"type"=依 bnb_type 篩（包棟＝整個 Bnb / Apartment 類型，
-    # 跨國家、與台/日/韓有重疊，屬額外切面而非獨立產品線）
+    sub_tabs = st.tabs(["🇹🇼 台灣住宿", "🇰🇷 韓國住宿", "🇯🇵 日本住宿", "⛺ 露營"])
+    # (product_line, 分頁, 標籤, 台灣縣市名需英轉中)
     configs = [
-        ("TW",              sub_tabs[0], "台灣", "pl"),
-        ("KR",              sub_tabs[1], "韓國", "pl"),
-        ("JP",              sub_tabs[2], "日本", "pl"),
-        ("Camping",         sub_tabs[3], "露營", "pl"),
-        ("Bnb / Apartment", sub_tabs[4], "包棟", "type"),
+        ("TW",      sub_tabs[0], "台灣", True),
+        ("KR",      sub_tabs[1], "韓國", False),
+        ("JP",      sub_tabs[2], "日本", False),
+        ("Camping", sub_tabs[3], "露營", False),
     ]
-    for key, tab, label, mode in configs:
+    for pl, tab, label, tw_names in configs:
         with tab:
-            if mode == "pl":
-                sub      = df[df["product_line"] == key]
-                sub_prev = df_prev[df_prev["product_line"] == key]
-            else:  # 包棟：依 bnb_type 篩，跨所有國家
-                sub      = df[df["bnb_type"] == key]
-                sub_prev = df_prev[df_prev["bnb_type"] == key]
-            if sub.empty:
+            base      = df[df["product_line"] == pl]
+            base_prev = df_prev[df_prev["product_line"] == pl]
+            if base.empty:
                 st.info(f"此篩選範圍內無{label}訂單。")
                 continue
-            if key == "Bnb / Apartment":
-                st.caption("包棟＝整個 Bnb / Apartment 類型（跨台/日/韓，與各國住宿分頁有重疊）")
-            c1, c2 = st.columns(2)
-            kpi(c1, f"{label}營收",   sub["twd_amount"].sum(), sub_prev["twd_amount"].sum())
-            kpi(c2, f"{label}訂單數", len(sub), len(sub_prev), fmt="count")
 
-            # ── 各地區 營收 + AOV ──────────────────────────
-            if key == "TW":
-                # 台灣：縣市名已轉中文（沿用地圖的轉換）
-                stats = dp.tw_city_geo(df).rename(columns={"縣市": "地區"})
-                stats["AOV"] = (stats["營收"] / stats["訂單數"]).round(0)
-                region_word = "縣市"
-            else:
-                sub_geo = sub.copy()
-                if key == "Bnb / Apartment":
-                    # 包棟以台灣為大宗：台灣縣市英文轉中文，其餘國家維持原值
-                    sub_geo["bnb_city"] = (sub_geo["bnb_city"].map(dp._TW_CITY_ZH)
-                                                              .fillna(sub_geo["bnb_city"]))
-                stats = _region_stats(sub_geo, "bnb_city")
-                region_word = "縣市/城市" if key == "Bnb / Apartment" else "城市"
-            render_accom_region(stats, label, region_word)
-
-            # ── 入住月份（整列）────────────────────────────
-            ci_df = (sub.assign(check_in_month=sub["check_in"].dt.to_period("M").astype(str))
-                        .groupby("check_in_month")
-                        .agg(訂單數=("order_id", "count")).reset_index())
-            fig2 = px.bar(ci_df, x="check_in_month", y="訂單數",
-                          title=f"{label} 入住月份分佈",
-                          labels={"check_in_month": "入住月份"})
-            fig2.update_xaxes(type="category", categoryorder="category ascending")
-            st.plotly_chart(fig2, use_container_width=True)
-
-            if key == "TW":
-                st.subheader("住宿類型分佈")
-                type_df = (sub.groupby("bnb_type")
-                              .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
-                              .reset_index()
-                              .sort_values("營收", ascending=False))
-                tc1, tc2 = st.columns(2)
-                with tc1:
-                    fig_t = px.bar(type_df, x="bnb_type", y="訂單數", color="bnb_type",
-                                   title="住宿類型（訂單數）", text_auto=True)
-                    fig_t.update_layout(showlegend=False)
-                    st.plotly_chart(fig_t, use_container_width=True)
-                with tc2:
-                    fig_t2 = px.bar(type_df, x="bnb_type", y="營收", color="bnb_type",
-                                    title="住宿類型（營收）", text_auto=".2s")
-                    fig_t2.update_layout(showlegend=False)
-                    st.plotly_chart(fig_t2, use_container_width=True)
-
-            if key == "JP":
-                st.subheader("星野飯店訂單")
-                hoshino = sub[sub["bnb_name"].str.contains("星野|Hoshino", case=False, na=False)]
-                if not hoshino.empty:
-                    h_df = (hoshino.groupby("bnb_name")
-                                   .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
-                                   .sort_values("營收", ascending=False)
-                                   .reset_index())
-                    st.dataframe(h_df, use_container_width=True)
-                else:
-                    st.info("目前篩選範圍內無星野飯店訂單。")
-
-            # ── 產品排行 ──────────────────────────────────
-            st.divider()
-            render_rank_tables(sub, sub_prev, with_city=True)
+            if pl in ("TW", "KR", "JP"):
+                # 各國底下再分：全部 / 住宿(不含包棟) / 包棟（包棟＝bnb_type==Bnb / Apartment）
+                is_villa      = base["bnb_type"] == "Bnb / Apartment"
+                is_villa_prev = base_prev["bnb_type"] == "Bnb / Apartment"
+                t_all, t_room, t_villa = st.tabs(["全部", "住宿(不含包棟)", "包棟"])
+                with t_all:
+                    render_accom_body(base, base_prev, f"{label}·全部", tw_names,
+                                      show_type_dist=(pl == "TW"), show_hoshino=(pl == "JP"))
+                with t_room:
+                    render_accom_body(base[~is_villa], base_prev[~is_villa_prev],
+                                      f"{label}·不含包棟", tw_names,
+                                      show_type_dist=(pl == "TW"), show_hoshino=(pl == "JP"))
+                with t_villa:
+                    render_accom_body(base[is_villa], base_prev[is_villa_prev],
+                                      f"{label}·包棟", tw_names)
+            else:  # 露營
+                render_accom_body(base, base_prev, label, tw_names)
 
 # ════════════════════════════════════════════════════════
 # SEB
