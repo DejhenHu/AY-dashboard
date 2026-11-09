@@ -350,6 +350,36 @@ def render_simple_tab(sub_df: pd.DataFrame, label: str,
             st.plotly_chart(fig_plat, use_container_width=True)
 
 
+def _region_stats(stats_src: pd.DataFrame, region_col: str) -> pd.DataFrame:
+    """各地區（縣市/城市）訂單數、營收、AOV（客單價＝營收/訂單數）。"""
+    g = (stats_src.groupby(region_col)
+                  .agg(訂單數=("order_id", "count"), 營收=("twd_amount", "sum"))
+                  .reset_index()
+                  .rename(columns={region_col: "地區"}))
+    g["AOV"] = (g["營收"] / g["訂單數"]).round(0)
+    return g
+
+
+def render_accom_region(stats: pd.DataFrame, label: str, region_word: str,
+                        aov_min: int = 5):
+    """住宿各地區：左＝營收長條、右＝AOV長條（AOV 預設只看 ≥aov_min 單，避免單筆高價誤導）。"""
+    rc1, rc2 = st.columns(2)
+    with rc1:
+        rev_df = stats.sort_values("營收", ascending=False).head(20)
+        fig_r = hbar(rev_df, x="營收", y="地區",
+                     title=f"{label} 各{region_word}營收（前20）")
+        st.plotly_chart(fig_r, use_container_width=True)
+    with rc2:
+        aov_df = stats[stats["訂單數"] >= aov_min]
+        note = f"（≥{aov_min}單）"
+        if aov_df.empty:                       # 訂單太少時改看全部，不留白
+            aov_df, note = stats, "（全部）"
+        aov_df = aov_df.sort_values("AOV", ascending=False).head(20)
+        fig_a = hbar(aov_df, x="AOV", y="地區",
+                     title=f"{label} 各{region_word} AOV 客單價{note}")
+        st.plotly_chart(fig_a, use_container_width=True)
+
+
 def render_rank_tables(sub: pd.DataFrame, sub_prev: pd.DataFrame,
                        with_city: bool = True, region_fn=None):
     """商品「訂單數排行」與「成長數排行」前10名表格（與住宿頁一致）。
@@ -1085,32 +1115,24 @@ elif page == "🏠 住宿 & 露營":
             kpi(c1, f"{label}營收",   sub["twd_amount"].sum(), sub_prev["twd_amount"].sum())
             kpi(c2, f"{label}訂單數", len(sub), len(sub_prev), fmt="count")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                if pl == "TW":
-                    # 台灣：用縣市地圖呈現（顏色越深營收越高）
-                    geo_df = dp.tw_city_geo(df)
-                    fig = px.choropleth(
-                        geo_df, geojson=load_tw_geojson(), locations="縣市",
-                        featureidkey="properties.COUNTYNAME",
-                        color="營收", color_continuous_scale="Blues",
-                        hover_data={"訂單數": True, "營收": ":,.0f"},
-                        title="台灣住宿 各縣市營收分布",
-                    )
-                    fig.update_geos(fitbounds="locations", visible=False)
-                    fig.update_layout(height=460, margin=dict(l=0, r=0, t=40, b=0))
-                else:
-                    city_df = dp.accommodation_region_distribution(df, pl)
-                    fig = hbar(city_df, x="營收", y="bnb_city",
-                               title=f"{label} 城市排行（前20）")
-                st.plotly_chart(fig, use_container_width=True)
-            with col2:
-                ci_df = dp.checkin_monthly(df, pl)
-                fig2 = px.bar(ci_df, x="check_in_month", y="訂單數",
-                              title=f"{label} 入住月份分佈",
-                              labels={"check_in_month": "入住月份"})
-                fig2.update_xaxes(type="category", categoryorder="category ascending")
-                st.plotly_chart(fig2, use_container_width=True)
+            # ── 各地區 營收 + AOV ──────────────────────────
+            if pl == "TW":
+                # 台灣：縣市名已轉中文（沿用地圖的轉換）
+                stats = dp.tw_city_geo(df).rename(columns={"縣市": "地區"})
+                stats["AOV"] = (stats["營收"] / stats["訂單數"]).round(0)
+                region_word = "縣市"
+            else:
+                stats = _region_stats(sub, "bnb_city")
+                region_word = "城市"
+            render_accom_region(stats, label, region_word)
+
+            # ── 入住月份（整列）────────────────────────────
+            ci_df = dp.checkin_monthly(df, pl)
+            fig2 = px.bar(ci_df, x="check_in_month", y="訂單數",
+                          title=f"{label} 入住月份分佈",
+                          labels={"check_in_month": "入住月份"})
+            fig2.update_xaxes(type="category", categoryorder="category ascending")
+            st.plotly_chart(fig2, use_container_width=True)
 
             if pl == "TW":
                 st.subheader("住宿類型分佈")
