@@ -1174,19 +1174,22 @@ elif page == "🏠 住宿 & 露營":
 
             if pl in ("TW", "KR", "JP"):
                 # 各國底下再分：全部 / 住宿(不含包棟) / 包棟（包棟＝bnb_type==Bnb / Apartment）
-                is_villa      = base["bnb_type"] == "Bnb / Apartment"
-                is_villa_prev = base_prev["bnb_type"] == "Bnb / Apartment"
-                t_all, t_room, t_villa = st.tabs(["全部", "住宿(不含包棟)", "包棟"])
-                with t_all:
+                # 用 radio 單選而非 st.tabs：st.tabs 會一次把三組內容全部算完(含大量圖表)，
+                # 在雲端容易因記憶體/渲染量過大而崩潰；radio 一次只渲染選中的一組。
+                view = st.radio("檢視範圍", ["全部", "住宿(不含包棟)", "包棟"],
+                                horizontal=True, key=f"accom_view_{pl}")
+                if view == "包棟":
+                    sel      = base[base["bnb_type"] == "Bnb / Apartment"]
+                    sel_prev = base_prev[base_prev["bnb_type"] == "Bnb / Apartment"]
+                    render_accom_body(sel, sel_prev, f"{label}·包棟", tw_names)
+                elif view == "住宿(不含包棟)":
+                    sel      = base[base["bnb_type"] != "Bnb / Apartment"]
+                    sel_prev = base_prev[base_prev["bnb_type"] != "Bnb / Apartment"]
+                    render_accom_body(sel, sel_prev, f"{label}·不含包棟", tw_names,
+                                      show_type_dist=(pl == "TW"), show_hoshino=(pl == "JP"))
+                else:  # 全部
                     render_accom_body(base, base_prev, f"{label}·全部", tw_names,
                                       show_type_dist=(pl == "TW"), show_hoshino=(pl == "JP"))
-                with t_room:
-                    render_accom_body(base[~is_villa], base_prev[~is_villa_prev],
-                                      f"{label}·不含包棟", tw_names,
-                                      show_type_dist=(pl == "TW"), show_hoshino=(pl == "JP"))
-                with t_villa:
-                    render_accom_body(base[is_villa], base_prev[is_villa_prev],
-                                      f"{label}·包棟", tw_names)
             else:  # 露營
                 render_accom_body(base, base_prev, label, tw_names)
 
